@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel de Rechazos · Saga Trans Confitería</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="app">
+
+    <!-- Riel de módulos -->
+    <div class="no-print rail" id="rail">
+      <div class="rail-logo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+      </div>
+      <button class="rail-item rail-active" title="Rechazos">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+        <span class="rail-label">Rechazos</span>
+      </button>
+      <button class="rail-item" title="Ventas — próximamente">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
+        <span class="rail-label">Ventas</span>
+      </button>
+      <button class="rail-item" title="Logística — próximamente">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="15" height="10" rx="1"/><path d="M16 10h4l3 3v4h-7z"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/></svg>
+        <span class="rail-label">Logística</span>
+      </button>
+      <button class="rail-item" title="Cobranzas — próximamente">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+        <span class="rail-label">Cobranzas</span>
+      </button>
+    </div>
+
+    <div class="content-pad">
+      <div class="wrap">
+
+        <!-- Header -->
+        <div class="page-header">
+          <div>
+            <div class="eyebrow">Rechazos · Saga Trans Confitería</div>
+            <h1 class="page-title">Panel de Rechazos</h1>
+            <div class="subtitle">Corte al <span id="corteLabel">—</span></div>
+          </div>
+          <div class="no-print corte-controls">
+            <div class="segmented">
+              <button class="tab-btn tab-active" id="btnModoMes">Cierre de mes</button>
+              <button class="tab-btn" id="btnModoDia">Día específico</button>
+            </div>
+            <select id="mesSel" class="input-select"></select>
+            <input type="date" id="diaSel" class="input-select" style="display:none;">
+          </div>
+        </div>
+
+        <div id="pendienteBanner" class="pendiente-banner no-print" style="display:none;"></div>
+
+        <!-- Tabs -->
+        <div class="tabbar">
+          <button class="tab-btn tab-active" data-tab="general">Vista general</button>
+          <button class="tab-btn" data-tab="conductor">Por conductor</button>
+          <button class="tab-btn" data-tab="vendedor">Por vendedor</button>
+          <button class="tab-btn" data-tab="documentos">Documentos rechazados</button>
+        </div>
+
+        <!-- ===== TAB: VISTA GENERAL ===== -->
+        <section class="tab-panel" id="panel-general">
+          <div class="no-print section-head">
+            <div class="section-title">Cruce Chofer × Vendedor · <span class="corteLabelInline">—</span></div>
+            <button class="export-btn" data-print="printArea-general">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+              Descargar PDF
+            </button>
+          </div>
+          <div id="printArea-general">
+            <div class="kpi-grid kpi-grid-3" id="cross-kpis"></div>
+            <div class="card">
+              <div class="table-scroll"><table id="cross-table"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+            </div>
+            <div class="note" id="cross-note"></div>
+          </div>
+        </section>
+
+        <!-- ===== TAB: POR CONDUCTOR ===== -->
+        <section class="tab-panel" id="panel-conductor" style="display:none;">
+          <div class="no-print section-head">
+            <div class="section-title">Vista por conductor · <span class="corteLabelInline">—</span></div>
+            <button class="export-btn" data-print="printArea-conductor">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+              Descargar PDF
+            </button>
+          </div>
+          <div class="no-print toolbar">
+            <input type="text" id="condSearch" placeholder="Buscar conductor o código...">
+            <div class="alert-group">
+              <button class="alert-btn" id="condAlertToggle">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C1432B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+                <span id="condAlertLabel">Solo alertas ≥2%</span>
+              </button>
+              <div class="umbral-box">
+                <label>umbral</label>
+                <input type="number" id="condUmbral" value="2" min="0" max="100" step="0.5">
+                <span>%</span>
+              </div>
+            </div>
+          </div>
+          <div id="printArea-conductor">
+            <div class="kpi-grid kpi-grid-4" id="cond-kpis"></div>
+            <div class="card">
+              <div class="table-scroll"><table id="cond-table"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+            </div>
+          </div>
+          <div class="note" id="cond-note"></div>
+        </section>
+
+        <!-- ===== TAB: POR VENDEDOR ===== -->
+        <section class="tab-panel" id="panel-vendedor" style="display:none;">
+          <div class="no-print section-head">
+            <div class="section-title">Vista por vendedor · <span class="corteLabelInline">—</span></div>
+            <button class="export-btn" data-print="printArea-vendedor">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+              Descargar PDF
+            </button>
+          </div>
+          <div class="no-print toolbar">
+            <input type="text" id="vendSearch" placeholder="Buscar vendedor o código...">
+          </div>
+          <div id="printArea-vendedor">
+            <div class="kpi-grid kpi-grid-4" id="vend-kpis"></div>
+            <div class="card">
+              <div class="table-scroll"><table id="vend-table"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+            </div>
+          </div>
+          <div class="note" id="vend-note"></div>
+        </section>
+
+        <!-- ===== TAB: DOCUMENTOS RECHAZADOS ===== -->
+        <section class="tab-panel" id="panel-documentos" style="display:none;">
+          <div class="card filter-card no-print">
+            <div class="filter-row">
+              <div class="filter-field">
+                <label>Buscar</label>
+                <input type="text" id="docSearch" placeholder="Documento o cliente...">
+              </div>
+              <div class="filter-field">
+                <label>Vendedor</label>
+                <select id="docVendor"></select>
+              </div>
+              <div class="filter-field">
+                <label>Motivo</label>
+                <select id="docMotivo"></select>
+              </div>
+              <div class="filter-field">
+                <label>Monto (S/)</label>
+                <div class="range-inputs">
+                  <input type="number" id="docMontoMin" placeholder="Mín">
+                  <span>–</span>
+                  <input type="number" id="docMontoMax" placeholder="Máx">
+                </div>
+              </div>
+              <div class="filter-field">
+                <label>Fecha</label>
+                <div class="range-inputs">
+                  <input type="date" id="docFechaFrom">
+                  <span>–</span>
+                  <input type="date" id="docFechaTo">
+                </div>
+              </div>
+              <button class="clear-btn" id="docClear">Limpiar</button>
+            </div>
+          </div>
+
+          <div class="kpi-grid kpi-grid-4" id="doc-kpis"></div>
+
+          <div class="no-print doc-toolbar">
+            <div class="note" id="doc-result-label"></div>
+            <button class="export-btn" id="docExportCSV">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              Descargar Excel (CSV)
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-scroll"><table id="doc-table"><thead></thead><tbody></tbody></table></div>
+          </div>
+          <div class="doc-footer">
+            <div class="note">Cliente y Vendedor vienen del cruce por N° de Documento con Ventas/Contabilidad NC.</div>
+            <div class="pager">
+              <button class="page-btn" id="docPrev">&larr;</button>
+              <span id="docPageLabel"></span>
+              <button class="page-btn" id="docNext">&rarr;</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
