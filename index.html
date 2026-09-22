@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel de Rechazos · Saga Trans Confitería</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=8">
+<link rel="stylesheet" href="css/style.css?v=9">
 </head>
 <body>
 
@@ -96,10 +96,16 @@
         <section class="tab-panel" id="panel-general">
           <div class="no-print section-head">
             <div class="section-title">Cruce Chofer × Vendedor · <span class="corteLabelInline">—</span></div>
-            <button class="export-btn" data-print="printArea-general">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-              Descargar PDF
-            </button>
+            <div class="export-group">
+              <button class="export-btn" data-print="printArea-general">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                Descargar PDF
+              </button>
+              <button class="export-btn" id="exportGeneralCSV">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                Descargar Excel (CSV)
+              </button>
+            </div>
           </div>
           <div id="printArea-general">
             <div class="print-title">
@@ -118,10 +124,16 @@
         <section class="tab-panel" id="panel-conductor" style="display:none;">
           <div class="no-print section-head">
             <div class="section-title">Vista por conductor · <span class="corteLabelInline">—</span></div>
-            <button class="export-btn" data-print="printArea-conductor">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-              Descargar PDF
-            </button>
+            <div class="export-group">
+              <button class="export-btn" data-print="printArea-conductor">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                Descargar PDF
+              </button>
+              <button class="export-btn" id="exportConductorCSV">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                Descargar Excel (CSV)
+              </button>
+            </div>
           </div>
           <div class="no-print toolbar">
             <input type="text" id="condSearch" placeholder="Buscar conductor o código...">
@@ -154,10 +166,16 @@
         <section class="tab-panel" id="panel-vendedor" style="display:none;">
           <div class="no-print section-head">
             <div class="section-title">Vista por vendedor · <span class="corteLabelInline">—</span></div>
-            <button class="export-btn" data-print="printArea-vendedor">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-              Descargar PDF
-            </button>
+            <div class="export-group">
+              <button class="export-btn" data-print="printArea-vendedor">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                Descargar PDF
+              </button>
+              <button class="export-btn" id="exportVendedorCSV">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                Descargar Excel (CSV)
+              </button>
+            </div>
           </div>
           <div class="no-print toolbar">
             <input type="text" id="vendSearch" placeholder="Buscar vendedor o código...">
@@ -179,10 +197,16 @@
         <section class="tab-panel" id="panel-motivo" style="display:none;">
           <div class="no-print section-head">
             <div class="section-title">Rechazos por motivo / reparto · <span class="corteLabelInline">—</span></div>
-            <button class="export-btn" data-print="printArea-motivo">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-              Descargar PDF
-            </button>
+            <div class="export-group">
+              <button class="export-btn" data-print="printArea-motivo">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                Descargar PDF
+              </button>
+              <button class="export-btn" id="exportMotivoCSV">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                Descargar Excel (CSV)
+              </button>
+            </div>
           </div>
           <div id="printArea-motivo">
             <div class="print-title">
@@ -267,6 +291,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="js/config.js?v=4"></script>
-  <script src="js/app.js?v=19"></script>
+  <script src="js/app.js?v=21"></script>
 </body>
 </html>
