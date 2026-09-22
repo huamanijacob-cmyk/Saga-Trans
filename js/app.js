@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js versión 8 (fix: Documento compuesto también en Transportistas)');
+console.log('Panel de Rechazos — app.js versión 10 (corte acumulado, alineación %, dise00f1o refinado)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -164,20 +164,31 @@ async function loadModuleFile(folder, prefix, periodo) {
 
 /* ---------------- corte (mes / día) ---------------- */
 
+const MES_NOMBRE = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','setiembre','octubre','noviembre','diciembre'];
+
 function getCorteRange() {
-  if (state.modo === 'dia') return { from: state.diaSel, to: state.diaSel };
+  // "Día específico" es un corte ACUMULADO desde el día 1 del mes hasta el
+  // día elegido (igual que "Rechazos al [fecha]" del Excel original) — no
+  // es solo las transacciones de ese día suelto.
+  if (state.modo === 'dia') return { from: state.diaSel.slice(0, 7) + '-01', to: state.diaSel };
   return monthBounds(state.mesSel);
 }
 function getCorteLabel() {
   if (state.modo === 'dia') {
-    const d = new Date(state.diaSel + 'T00:00:00');
-    return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' });
+    const [y, m, d] = state.diaSel.split('-').map(Number);
+    return `${d} de ${MES_NOMBRE[m - 1]} del ${y}`;
   }
   const [y, m] = state.mesSel.split('-').map(Number);
   const esMesActual = state.mesSel === isoDate(new Date()).slice(0, 7);
-  const lastDay = new Date(y, m, 0).getDate();
-  const dt = new Date(y, m - 1, esMesActual ? new Date().getDate() : lastDay);
-  return dt.toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' }) + (esMesActual ? ' (a la fecha)' : ' (cierre de mes)');
+  const dia = esMesActual ? new Date().getDate() : new Date(y, m, 0).getDate();
+  return `${dia} de ${MES_NOMBRE[m - 1]} del ${y}`;
+}
+function syncDocRangeFromCorte() {
+  const range = getCorteRange();
+  state.doc.from = range.from;
+  state.doc.to = range.to;
+  document.getElementById('docFechaFrom').value = range.from;
+  document.getElementById('docFechaTo').value = range.to;
 }
 
 function initCorteControls() {
@@ -213,21 +224,25 @@ function initCorteControls() {
     sel.style.display = 'none'; dia.style.display = '';
     onCorteChanged();
   });
+
+  syncDocRangeFromCorte();
 }
 
 async function onCorteChanged() {
-  const range = getCorteRange();
-  state.doc.from = range.from;
-  state.doc.to = range.to;
-  document.getElementById('docFechaFrom').value = range.from;
-  document.getElementById('docFechaTo').value = range.to;
-
+  syncDocRangeFromCorte();
   await loadCorteData();
   await renderDocumentos();
   renderAll();
 }
 
 /* ---------------- carga de datos del corte activo ---------------- */
+
+function esRechazoReal(motivo) {
+  // "Rechazo" en este panel = notas de crédito por DEVOLUCIÓN de ítem
+  // (mercadería rechazada). Excluye "Descuento por ítem", que es un
+  // ajuste comercial, no un rechazo de pedido.
+  return !!(motivo && /DEVOLUCION/i.test(motivo));
+}
 
 async function loadCorteData() {
   const periodo = state.modo === 'dia' ? state.diaSel.slice(0, 7) : state.mesSel;
@@ -237,7 +252,7 @@ async function loadCorteData() {
     loadModuleFile('ContabilidadNC', 'ContabilidadNC', periodo),
   ]);
 
-  let transportistas = t, ventas = v, nc = n;
+  let transportistas = t, ventas = v, nc = n.filter(r => esRechazoReal(r.motivo));
   if (state.modo === 'dia') {
     const d = state.diaSel;
     transportistas = transportistas.filter(r => toISO(r.fecemi) === d);
@@ -256,6 +271,7 @@ async function loadDocumentosData() {
   const arrays = await Promise.all(periodos.map(p => loadModuleFile('ContabilidadNC', 'ContabilidadNC', p)));
   const all = arrays.flat();
   return all.filter(r => {
+    if (!esRechazoReal(r.motivo)) return false;
     const iso = toISO(r.emision);
     return iso && iso >= state.doc.from && iso <= state.doc.to;
   });
@@ -541,7 +557,7 @@ function renderVendedor() {
   trT.appendChild(el('td', 'num', hayVentas ? fmtMoney(ventaRealTotal) : '<span class="muted" style="font-style:italic">pendiente</span>'));
   trT.appendChild(el('td', 'num rej', fmtMoney(montoTotal)));
   trT.appendChild(el('td', 'num', docsTotal));
-  trT.appendChild(el('td', 'muted', hayVentas ? fmtPct(pctTotal) : '<span style="font-style:italic">pendiente</span>'));
+  trT.appendChild(hayVentas ? pctCell(pctTotal, state.cond.umbral) : el('td', 'muted', '<span style="font-style:italic">pendiente</span>'));
   trT.appendChild(el('td'));
   tfoot.appendChild(trT);
 
@@ -744,6 +760,7 @@ const loginSpinner = document.getElementById('loginSpinner');
 const loginBtnText = document.getElementById('loginBtnText');
 const logoutBtn = document.getElementById('logoutBtn');
 const userEmailLabel = document.getElementById('userEmailLabel');
+const userAvatar = document.getElementById('userAvatar');
 
 // Cierre de sesión automático por inactividad (30 min — ajusta si quieres).
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
@@ -773,6 +790,7 @@ async function showApp(session) {
   loginScreen.style.display = 'none';
   appRoot.style.display = '';
   if (userEmailLabel) userEmailLabel.textContent = session?.user?.email || '';
+  if (userAvatar) userAvatar.textContent = (session?.user?.email || '?').trim().charAt(0).toUpperCase();
   sessionActive = true;
   resetInactivityTimer();
 
