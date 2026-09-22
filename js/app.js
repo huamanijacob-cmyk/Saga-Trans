@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 21 (las 4 vistas tienen PDF y Excel por igual)');
+console.log('Panel de Rechazos — app.js version 23 (exportaciones ahora son .xlsx con formato real, via ExcelJS)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -108,10 +108,6 @@ function monthsBetween(from, to) {
   }
   return out;
 }
-function csvEscape(v) {
-  const s = String(v == null ? '' : v);
-  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
 function buildDocNumber(r) {
   // Ni Transportistas ni Contabilidad NC traen un "Documento" en una sola
   // columna en el Excel sin fórmulas: en ambos se arma con
@@ -135,6 +131,108 @@ function downloadBlob(filename, content, mime) {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// Paleta del panel, en ARGB (formato que pide ExcelJS).
+const XL_NAVY = 'FF16356B';
+const XL_TEAL = 'FF1F9A8C';
+const XL_RED = 'FFC1432B';
+const XL_CREAM = 'FFF5F3ED';
+const XL_STRIPE = 'FFFBF9F4';
+const XL_WHITE = 'FFFFFFFF';
+const XL_BORDER = { style: 'thin', color: { argb: 'FFE4E0D4' } };
+
+async function downloadStyledXlsx({ filename, sheetName, title, subtitle, columns, rows, totalsRow, groupHeader }) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Panel de Rechazos · Saga Trans Confitería';
+  const ws = wb.addWorksheet(sheetName || 'Datos', { views: [{ state: 'frozen', ySplit: groupHeader ? 4 : 3 }] });
+  const nCols = columns.length;
+
+  // Título
+  ws.mergeCells(1, 1, 1, nCols);
+  const titleCell = ws.getCell(1, 1);
+  titleCell.value = title;
+  titleCell.font = { bold: true, size: 15, color: { argb: XL_WHITE }, name: 'Calibri' };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_NAVY } };
+  ws.getRow(1).height = 26;
+
+  // Subtítulo
+  ws.mergeCells(2, 1, 2, nCols);
+  const subCell = ws.getCell(2, 1);
+  subCell.value = subtitle || '';
+  subCell.font = { italic: true, size: 10, color: { argb: 'FF6B675F' } };
+  subCell.alignment = { horizontal: 'center' };
+  ws.getRow(2).height = 18;
+
+  let headerRowIdx = 3;
+
+  // Encabezado agrupado opcional (ej. "VENDEDORES" arriba de las columnas de vendedor)
+  if (groupHeader) {
+    const gRow = ws.getRow(3);
+    if (groupHeader.startCol > 1) ws.mergeCells(3, 1, 3, groupHeader.startCol - 1);
+    ws.mergeCells(3, groupHeader.startCol, 3, groupHeader.endCol);
+    const gCell = ws.getCell(3, groupHeader.startCol);
+    gCell.value = groupHeader.label;
+    gCell.font = { bold: true, color: { argb: XL_WHITE }, size: 11 };
+    gCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    gCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_TEAL } };
+    gRow.height = 20;
+    headerRowIdx = 4;
+  }
+
+  // Encabezados de columna
+  const headerRow = ws.getRow(headerRowIdx);
+  columns.forEach((c, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = c.header;
+    cell.font = { bold: true, color: { argb: XL_WHITE }, size: 10 };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_NAVY } };
+    cell.border = { top: XL_BORDER, left: XL_BORDER, right: XL_BORDER, bottom: XL_BORDER };
+    ws.getColumn(i + 1).width = c.width || 16;
+  });
+  headerRow.height = 26;
+
+  // Filas de datos (alternadas)
+  rows.forEach((r, ri) => {
+    const row = ws.getRow(headerRowIdx + 1 + ri);
+    columns.forEach((c, ci) => {
+      const cell = row.getCell(ci + 1);
+      const raw = r[ci];
+      if (c.isCode) {
+        cell.value = raw == null || raw === '' ? '' : String(raw);
+        cell.numFmt = '@'; // texto exacto: conserva ceros a la izquierda
+      } else {
+        cell.value = raw === '' || raw == null ? null : raw; // deja vacío en vez de 0
+      }
+      if (c.numFmt && !c.isCode) cell.numFmt = c.numFmt;
+      cell.alignment = { horizontal: c.align || 'left', vertical: 'middle' };
+      cell.border = { top: XL_BORDER, left: XL_BORDER, right: XL_BORDER, bottom: XL_BORDER };
+      if (ri % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_STRIPE } };
+      if (c.red && raw) cell.font = { color: { argb: XL_RED } };
+    });
+  });
+
+  // Fila de totales
+  if (totalsRow) {
+    const row = ws.getRow(headerRowIdx + 1 + rows.length);
+    columns.forEach((c, ci) => {
+      const cell = row.getCell(ci + 1);
+      const raw = totalsRow[ci];
+      cell.value = raw === '' || raw == null ? null : raw;
+      if (c.numFmt) cell.numFmt = c.numFmt;
+      cell.font = { bold: true, color: { argb: c.red ? XL_RED : 'FF211F1A' } };
+      cell.alignment = { horizontal: c.align || 'left', vertical: 'middle' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_CREAM } };
+      cell.border = { top: { style: 'double', color: { argb: 'FF16356B' } }, bottom: XL_BORDER, left: XL_BORDER, right: XL_BORDER };
+    });
+    row.height = 20;
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  downloadBlob(filename, buf, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+
 function el(tag, cls, html) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -354,7 +452,7 @@ async function loadDocumentosData() {
 
 /* ---------------- Vista general (cruce Chofer x Vendedor) ---------------- */
 
-function exportGeneralCSV() {
+async function exportGeneralCSV() {
   const cross = [];
   CORTE_DATA.ventas.forEach(r => {
     if (r.vtadvo !== 'D') return;
@@ -376,18 +474,30 @@ function exportGeneralCSV() {
   choferCods.forEach(c => matrix[c] = {});
   cross.forEach(c => { matrix[c.choferCod][c.vendCod] = (matrix[c.choferCod][c.vendCod] || 0) + c.monto; });
 
-  const header = ['Chofer'].concat(vendCols.map(vendedorLabel)).concat(['Total']);
-  const lines = [header.map(csvEscape).join(',')];
+  const columns = [{ header: 'Chofer', width: 26 }]
+    .concat(vendCols.map(v => ({ header: vendedorLabel(v).toUpperCase(), width: 16, numFmt: '#,##0', align: 'center', red: true })))
+    .concat([{ header: 'Total', width: 16, numFmt: '#,##0', align: 'center', red: true }]);
+
   const colTotals = vendCols.map(() => 0);
   let grandTotal = 0;
-  choferCods.forEach(ch => {
+  const rows = choferCods.map(ch => {
     let rowTotal = 0;
-    const vals = vendCols.map((v, i) => { const val = matrix[ch][v] || 0; rowTotal += val; colTotals[i] += val; return val.toFixed(2); });
+    const vals = vendCols.map((v, i) => { const val = matrix[ch][v] || 0; rowTotal += val; colTotals[i] += val; return val || ''; });
     grandTotal += rowTotal;
-    lines.push([choferNombre[ch]].concat(vals).concat([rowTotal.toFixed(2)]).map(csvEscape).join(','));
+    return [choferNombre[ch]].concat(vals).concat([rowTotal]);
   });
-  lines.push(['Total general'].concat(colTotals.map(t => t.toFixed(2))).concat([grandTotal.toFixed(2)]).map(csvEscape).join(','));
-  downloadBlob(`vista_general_${getCorteRange().to}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
+  const totalsRow = ['Total general'].concat(colTotals).concat([grandTotal]);
+
+  await downloadStyledXlsx({
+    filename: `vista_general_${getCorteRange().to}.xlsx`,
+    sheetName: 'Vista General',
+    title: 'RECHAZOS SAGA TRANS · Confitería — Vista General',
+    subtitle: `Cruce Chofer × Vendedor · Corte al ${getCorteLabel()}`,
+    groupHeader: { label: 'VENDEDORES', startCol: 2, endCol: vendCols.length + 1 },
+    columns,
+    rows,
+    totalsRow,
+  });
 }
 
 function renderGeneral() {
@@ -492,17 +602,32 @@ function renderGeneral() {
 
 /* ---------------- Por conductor ---------------- */
 
-function exportConductorCSV() {
-  const rows = aggregateConductor();
+async function exportConductorCSV() {
+  const rows = aggregateConductor().sort((a, b) => b.monto - a.monto);
   const totals = rows.reduce((a, r) => ({ facturado: a.facturado + r.facturado, ventaReal: a.ventaReal + r.ventaReal, monto: a.monto + r.monto, pedidos: a.pedidos + r.pedidos }), { facturado: 0, ventaReal: 0, monto: 0, pedidos: 0 });
   const totalPct = totals.facturado ? totals.monto / totals.facturado : 0;
-  const header = ['Conductor', 'Codigo', 'Facturado', 'Venta real', 'Monto rechazado', 'Pedidos', '% Rechazo'];
-  const lines = [header.map(csvEscape).join(',')];
-  rows.sort((a, b) => b.monto - a.monto).forEach(r => {
-    lines.push([r.nombre, r.cod, r.facturado.toFixed(2), r.ventaReal.toFixed(2), r.monto.toFixed(2), r.pedidos, (r.pct * 100).toFixed(2) + '%'].map(csvEscape).join(','));
+
+  const columns = [
+    { header: 'Conductor', width: 30 },
+    { header: 'Código', width: 12, isCode: true, align: 'center' },
+    { header: 'Facturado', width: 16, numFmt: '#,##0', align: 'right' },
+    { header: 'Venta real', width: 16, numFmt: '#,##0', align: 'right' },
+    { header: 'Monto rechazado', width: 18, numFmt: '#,##0', align: 'right', red: true },
+    { header: 'Pedidos', width: 12, numFmt: '#,##0', align: 'center' },
+    { header: '% Rechazo', width: 13, numFmt: '0.00"%"', align: 'right', red: true },
+  ];
+  const dataRows = rows.map(r => [r.nombre, r.cod, r.facturado, r.ventaReal, r.monto, r.pedidos, r.pct * 100]);
+  const totalsRow = ['Total general', '', totals.facturado, totals.ventaReal, totals.monto, totals.pedidos, totalPct * 100];
+
+  await downloadStyledXlsx({
+    filename: `por_conductor_${getCorteRange().to}.xlsx`,
+    sheetName: 'Por Conductor',
+    title: 'RECHAZOS SAGA TRANS · Confitería — Por Conductor',
+    subtitle: `Corte al ${getCorteLabel()}`,
+    columns,
+    rows: dataRows,
+    totalsRow,
   });
-  lines.push(['Total general', '', totals.facturado.toFixed(2), totals.ventaReal.toFixed(2), totals.monto.toFixed(2), totals.pedidos, (totalPct * 100).toFixed(2) + '%'].map(csvEscape).join(','));
-  downloadBlob(`por_conductor_${getCorteRange().to}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
 }
 
 function aggregateConductor() {
@@ -626,17 +751,32 @@ function aggregateVendedor() {
   return Object.values(map).map(r => ({ ...r, ventaReal: r.facturado - r.monto, pct: r.facturado ? r.monto / r.facturado : 0 }));
 }
 
-function exportVendedorCSV() {
-  const rows = aggregateVendedor();
+async function exportVendedorCSV() {
+  const rows = aggregateVendedor().sort((a, b) => b.monto - a.monto);
   const totals = rows.reduce((a, r) => ({ facturado: a.facturado + r.facturado, ventaReal: a.ventaReal + r.ventaReal, monto: a.monto + r.monto, pedidos: a.pedidos + r.pedidos }), { facturado: 0, ventaReal: 0, monto: 0, pedidos: 0 });
   const totalPct = totals.facturado ? totals.monto / totals.facturado : 0;
-  const header = ['Vendedor', 'Codigo', 'Facturado', 'Venta real', 'Monto rechazado', 'Pedidos', '% Rechazo'];
-  const lines = [header.map(csvEscape).join(',')];
-  rows.sort((a, b) => b.monto - a.monto).forEach(r => {
-    lines.push([vendedorLabel(r.cod), r.cod, r.facturado.toFixed(2), r.ventaReal.toFixed(2), r.monto.toFixed(2), r.pedidos, (r.pct * 100).toFixed(2) + '%'].map(csvEscape).join(','));
+
+  const columns = [
+    { header: 'Vendedor', width: 30 },
+    { header: 'Código', width: 12, isCode: true, align: 'center' },
+    { header: 'Facturado', width: 16, numFmt: '#,##0', align: 'right' },
+    { header: 'Venta real', width: 16, numFmt: '#,##0', align: 'right' },
+    { header: 'Monto rechazado', width: 18, numFmt: '#,##0', align: 'right', red: true },
+    { header: 'Pedidos', width: 12, numFmt: '#,##0', align: 'center' },
+    { header: '% Rechazo', width: 13, numFmt: '0.00"%"', align: 'right', red: true },
+  ];
+  const dataRows = rows.map(r => [vendedorLabel(r.cod), r.cod, r.facturado, r.ventaReal, r.monto, r.pedidos, r.pct * 100]);
+  const totalsRow = ['Total general', '', totals.facturado, totals.ventaReal, totals.monto, totals.pedidos, totalPct * 100];
+
+  await downloadStyledXlsx({
+    filename: `por_vendedor_${getCorteRange().to}.xlsx`,
+    sheetName: 'Por Vendedor',
+    title: 'RECHAZOS SAGA TRANS · Confitería — Por Vendedor',
+    subtitle: `Corte al ${getCorteLabel()}`,
+    columns,
+    rows: dataRows,
+    totalsRow,
   });
-  lines.push(['Total general', '', totals.facturado.toFixed(2), totals.ventaReal.toFixed(2), totals.monto.toFixed(2), totals.pedidos, (totalPct * 100).toFixed(2) + '%'].map(csvEscape).join(','));
-  downloadBlob(`por_vendedor_${getCorteRange().to}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
 }
 
 function renderVendedor() {
@@ -703,7 +843,7 @@ function renderVendedor() {
 
 /* ---------------- Rechazos por motivo / reparto ---------------- */
 
-function exportMotivoCSV() {
+async function exportMotivoCSV() {
   const rows = [];
   CORTE_DATA.ventas.forEach(r => {
     if (r.vtadvo !== 'D') return;
@@ -725,18 +865,29 @@ function exportMotivoCSV() {
   choferes.forEach(c => matrix[c] = {});
   rows.forEach(r => { matrix[r.chofer][r.motivo] = (matrix[r.chofer][r.motivo] || 0) + r.monto; });
 
-  const header = ['Chofer'].concat(motivos).concat(['Total']);
-  const lines = [header.map(csvEscape).join(',')];
+  const columns = [{ header: 'Chofer', width: 26 }]
+    .concat(motivos.map(m => ({ header: m.toUpperCase(), width: 15, numFmt: '#,##0', align: 'center', red: true })))
+    .concat([{ header: 'Total', width: 15, numFmt: '#,##0', align: 'center', red: true }]);
+
   const colTotals = motivos.map(() => 0);
   let grandTotal = 0;
-  choferes.forEach(ch => {
+  const dataRows = choferes.map(ch => {
     let rowTotal = 0;
-    const vals = motivos.map((m, i) => { const val = matrix[ch][m] || 0; rowTotal += val; colTotals[i] += val; return val.toFixed(2); });
+    const vals = motivos.map((m, i) => { const val = matrix[ch][m] || 0; rowTotal += val; colTotals[i] += val; return val || ''; });
     grandTotal += rowTotal;
-    lines.push([ch].concat(vals).concat([rowTotal.toFixed(2)]).map(csvEscape).join(','));
+    return [ch].concat(vals).concat([rowTotal]);
   });
-  lines.push(['Total'].concat(colTotals.map(t => t.toFixed(2))).concat([grandTotal.toFixed(2)]).map(csvEscape).join(','));
-  downloadBlob(`rechazos_por_motivo_${getCorteRange().to}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
+  const totalsRow = ['Total'].concat(colTotals).concat([grandTotal]);
+
+  await downloadStyledXlsx({
+    filename: `rechazos_por_motivo_${getCorteRange().to}.xlsx`,
+    sheetName: 'Rechazos por Motivo',
+    title: 'RECHAZOS POR MOTIVO / REPARTO',
+    subtitle: `Saga Trans Confitería · Corte al ${getCorteLabel()}`,
+    columns,
+    rows: dataRows,
+    totalsRow,
+  });
 }
 
 function renderMotivo() {
@@ -964,15 +1115,43 @@ function drawDocumentos() {
   document.getElementById('docNext').disabled = state.doc.page === maxPage;
 }
 
-function exportDocumentosCSV() {
+async function exportDocumentosCSV() {
   const rows = filteredDocRows();
-  const header = ['Fecha', 'PDE', 'Codigo', 'Cliente', 'Vendedor', 'Chofer', 'Motivo', 'Monto'];
-  const lines = [header.map(csvEscape).join(',')];
-  rows.forEach(r => {
-    const chofer = r._chofer ? (r._chofer.nomcho || r._chofer.codcho) : '';
-    lines.push([toISO(r.fecha), (r._chofer && r._chofer.pde) || '', codCliente(r), r.nombrecliente, vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.vendedor] || r.vendedor), chofer, (r._chofer && r._chofer.desmot) || '', (-(Number(r.soles) || 0)).toFixed(2)].map(csvEscape).join(','));
+  const columns = [
+    { header: 'Fecha', width: 13 },
+    { header: 'PDE', width: 10, isCode: true, align: 'center' },
+    { header: 'Código', width: 14, isCode: true, align: 'center' },
+    { header: 'Cliente', width: 32 },
+    { header: 'Vendedor', width: 26 },
+    { header: 'Chofer', width: 26 },
+    { header: 'Motivo', width: 20 },
+    { header: 'Monto', width: 14, numFmt: '#,##0', align: 'right', red: true },
+  ];
+  const dataRows = rows.map(r => {
+    const chofer = r._chofer ? (r._chofer.nomcho || r._chofer.codcho) : 'Sin identificar';
+    return [
+      fmtFecha(r.fecha),
+      (r._chofer && r._chofer.pde) || '',
+      codCliente(r),
+      r.nombrecliente,
+      vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.vendedor] || r.vendedor),
+      chofer,
+      (r._chofer && r._chofer.desmot) || '',
+      -(Number(r.soles) || 0),
+    ];
   });
-  downloadBlob(`documentos_rechazados_${state.doc.from || 'todos'}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
+  const sum = rows.reduce((s, r) => s + -(Number(r.soles) || 0), 0);
+  const totalsRow = ['Total', '', '', '', '', '', `${rows.length} documento(s)`, sum];
+
+  await downloadStyledXlsx({
+    filename: `documentos_rechazados_${state.doc.from || 'todos'}.xlsx`,
+    sheetName: 'Documentos',
+    title: 'DOCUMENTOS RECHAZADOS',
+    subtitle: `Saga Trans Confitería · ${state.doc.from} al ${state.doc.to}`,
+    columns,
+    rows: dataRows,
+    totalsRow,
+  });
 }
 
 /* ---------------- tabs / render general ---------------- */
