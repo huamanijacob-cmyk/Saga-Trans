@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 11 (una sola fuente de verdad: Transportistas)');
+console.log('Panel de Rechazos — app.js version 12 (rechazo real: Ventas vtadvo V/D + cruce de chofer 2 pasos)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -118,6 +118,15 @@ function buildDocNumber(r) {
   // coddoc + sersun + numsun (ej. "BO"+"B002"+"00130369" = "BOB00200130369").
   return `${r.coddoc || ''}${r.sersun || ''}${r.numsun || ''}` || null;
 }
+function ventasDocNumber(r) {
+  // En Ventas el documento se arma distinto: tipo + serie + doc.
+  return `${r.tipo || ''}${r.serie || ''}${r.doc || ''}` || null;
+}
+function cleanRefDoc(raw) {
+  if (raw == null) return null;
+  const s = String(raw).replace(/\s+/g, '').replace(/-/g, '').trim();
+  return s || null;
+}
 function downloadBlob(filename, content, mime) {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -229,54 +238,87 @@ async function onCorteChanged() {
 
 /* ---------------- carga de datos del corte activo ---------------- */
 
-function transpRechazo(r) {
-  // El "monto rechazado" real no viene en una columna directa: se calcula
-  // como despachado menos entregado (igual que en el Excel original).
-  return (Number(r.totdsp) || 0) - (Number(r.totent) || 0);
-}
-function esPedidoRechazado(r) {
-  return transpRechazo(r) > 0.01;
-}
 function vendedorKey(r) {
-  return r.codven || 'OFICINA';
+  return r.vendedor || 'OFICINA';
 }
 function vendedorLabel(cod) {
   if (!cod || cod === 'OFICINA') return 'Vendedor Oficina';
   return VENDOR_NAMES[cod] || ('Vendedor ' + cod);
 }
 
+function buildDocToChoferMap(transportistas) {
+  const map = {};
+  transportistas.forEach(r => {
+    const doc = buildDocNumber(r);
+    if (doc) map[doc] = { codcho: r.codcho || null, nomcho: r.nomcho || r.codcho || null, desmot: r.desmot || null };
+  });
+  return map;
+}
+function buildNcRefToDocMap(nc) {
+  const map = {};
+  nc.forEach(r => {
+    const ref = cleanRefDoc(r.referencia);
+    const ncDoc = buildDocNumber(r);
+    if (ref && ncDoc) map[ref] = ncDoc;
+  });
+  return map;
+}
+function resolveChofer(ventaRow, docToChofer, ncRefToDoc) {
+  const own = ventasDocNumber(ventaRow);
+  let hit = own ? docToChofer[own] : null;
+  if (!hit && own) {
+    const ncDoc = ncRefToDoc[own];
+    if (ncDoc) hit = docToChofer[ncDoc];
+  }
+  return hit || null;
+}
+
 async function loadCorteData() {
   const periodo = state.modo === 'dia' ? state.diaSel.slice(0, 7) : state.mesSel;
-  const [t, v] = await Promise.all([
+  const [t, v, n] = await Promise.all([
     loadModuleFile('Transportistas', 'Transportistas', periodo),
     loadModuleFile('Ventas', 'Ventas', periodo),
+    loadModuleFile('ContabilidadNC', 'ContabilidadNC', periodo),
   ]);
 
-  let transportistas = t, ventas = v;
+  // Los mapas de cruce (documento -> chofer) se arman con el MES completo,
+  // no con el rango del día elegido, porque el despacho puede no coincidir
+  // exactamente con la fecha de venta.
+  const docToChofer = buildDocToChoferMap(t);
+  const ncRefToDoc = buildNcRefToDocMap(n);
+
+  let ventas = v;
   if (state.modo === 'dia') {
     const d = state.diaSel;
-    transportistas = transportistas.filter(r => toISO(r.fecemi) === d);
     ventas = ventas.filter(r => toISO(r.fecha) === d);
   }
-  CORTE_DATA = { transportistas, ventas };
+  // Resuelve y guarda el chofer de cada línea de venta una sola vez.
+  ventas.forEach(r => { r._chofer = resolveChofer(r, docToChofer, ncRefToDoc); });
 
-  // Nombres de vendedor: Transportistas ya trae nomvnd directo (más
-  // confiable), y Ventas complementa si hace falta.
-  transportistas.forEach(r => { if (r.codven && r.nomvnd) VENDOR_NAMES[r.codven] = r.nomvnd; });
+  CORTE_DATA = { transportistas: t, ventas };
+
   ventas.forEach(r => { if (r.vendedor && r.nombrevendedor && !VENDOR_NAMES[r.vendedor]) VENDOR_NAMES[r.vendedor] = r.nombrevendedor; });
 }
 
 async function loadDocumentosData() {
-  // "Documentos rechazados" = pedidos rechazados reales de Transportistas
-  // (un pedido = un documento), no notas de crédito — así los montos
-  // siempre cuadran con Vista general y Por conductor/vendedor.
+  // "Documentos rechazados" = líneas de Ventas con vtadvo = 'D' (devolución).
   if (!state.doc.from || !state.doc.to) return [];
   const periodos = monthsBetween(state.doc.from, state.doc.to);
-  const arrays = await Promise.all(periodos.map(p => loadModuleFile('Transportistas', 'Transportistas', p)));
-  const all = arrays.flat();
+  const results = await Promise.all(periodos.map(async p => {
+    const [t, v, n] = await Promise.all([
+      loadModuleFile('Transportistas', 'Transportistas', p),
+      loadModuleFile('Ventas', 'Ventas', p),
+      loadModuleFile('ContabilidadNC', 'ContabilidadNC', p),
+    ]);
+    const docToChofer = buildDocToChoferMap(t);
+    const ncRefToDoc = buildNcRefToDocMap(n);
+    v.forEach(r => { r._chofer = resolveChofer(r, docToChofer, ncRefToDoc); });
+    return v;
+  }));
+  const all = results.flat();
   return all.filter(r => {
-    if (!esPedidoRechazado(r)) return false;
-    const iso = toISO(r.fecemi);
+    if (r.vtadvo !== 'D') return false;
+    const iso = toISO(r.fecha);
     return iso && iso >= state.doc.from && iso <= state.doc.to;
   });
 }
@@ -287,12 +329,14 @@ function renderGeneral() {
   document.querySelectorAll('.corteLabelInline').forEach(e => e.textContent = getCorteLabel());
 
   const cross = [];
-  CORTE_DATA.transportistas.forEach(r => {
-    const monto = transpRechazo(r);
+  CORTE_DATA.ventas.forEach(r => {
+    if (r.vtadvo !== 'D') return;
+    const monto = -(Number(r.soles) || 0);
     if (monto <= 0.01) return;
+    const hit = r._chofer;
     cross.push({
-      choferCod: r.codcho || '—',
-      chofer: r.nomcho || r.codcho || 'Sin identificar',
+      choferCod: hit ? (hit.codcho || 'SIN_COD') : 'SIN_CHOFER',
+      chofer: hit ? (hit.nomcho || hit.codcho || 'Sin identificar') : 'Sin identificar',
       vendCod: vendedorKey(r),
       monto,
     });
@@ -378,30 +422,27 @@ function renderGeneral() {
   tfoot.appendChild(trFoot);
 
   document.getElementById('cross-note').textContent =
-    'Chofer y vendedor vienen de la misma fila de Transportistas, así que estos montos siempre cuadran con Por conductor y Por vendedor. Haz clic en cualquier celda para ver esos documentos.';
+    'Datos reales de Ventas (líneas de devolución). El vendedor viene directo de cada línea; el chofer se resuelve cruzando el documento contra Transportistas — por eso puede haber líneas "sin identificar" si el cruce no encuentra el documento. Haz clic en cualquier celda para ver esos documentos.';
 }
 
 /* ---------------- Por conductor ---------------- */
 
 function aggregateConductor() {
   const map = {};
-  CORTE_DATA.transportistas.forEach(r => {
-    const key = r.codcho || '—';
-    if (!map[key]) map[key] = { cod: key, nombre: r.nomcho || key, facturado: 0, ventaReal: 0, monto: 0, pedidos: 0 };
-    const facturado = Number(r.totdsp) || 0;
-    const entregado = Number(r.totent) || 0;
-    // El "monto rechazado" real NO viene en una columna directa (totfal suele
-    // venir en 0) — se calcula como despachado menos entregado, igual que en
-    // el Excel original.
-    const rechazado = facturado - entregado;
-    map[key].facturado += facturado;
-    map[key].ventaReal += entregado;
-    if (rechazado > 0.01) {
-      map[key].monto += rechazado;
+  CORTE_DATA.ventas.forEach(r => {
+    const hit = r._chofer;
+    const key = hit ? (hit.codcho || 'SIN_COD') : 'SIN_CHOFER';
+    if (!map[key]) map[key] = { cod: key, nombre: hit ? (hit.nomcho || hit.codcho) : 'Sin identificar', facturado: 0, monto: 0, pedidos: 0 };
+    const soles = Number(r.soles) || 0;
+    if (r.vtadvo === 'V') {
+      map[key].facturado += soles;
+    } else if (r.vtadvo === 'D') {
+      map[key].monto += -soles;
       map[key].pedidos += 1;
     }
   });
-  return Object.values(map).map(r => ({ ...r, pct: r.facturado ? r.monto / r.facturado : 0 }));
+  // Venta real = facturado - rechazado (igual que la fórmula del Excel: E=D-F).
+  return Object.values(map).map(r => ({ ...r, ventaReal: r.facturado - r.monto, pct: r.facturado ? r.monto / r.facturado : 0 }));
 }
 
 function kpiCard(color, label, value, pending) {
@@ -473,7 +514,7 @@ function renderConductor() {
   trT.appendChild(el('td'));
   tfoot.appendChild(trT);
 
-  document.getElementById('cond-note').textContent = `Mostrando ${rows.length} de ${all.length} conductores · datos reales de Transportistas (${getCorteLabel()}) · haz clic en un conductor para ver sus documentos.`;
+  document.getElementById('cond-note').textContent = `Mostrando ${rows.length} de ${all.length} conductores · datos reales de Ventas (${getCorteLabel()}) · haz clic en un conductor para ver sus documentos.`;
 }
 
 function pctCell(pct, umbral) {
@@ -495,20 +536,18 @@ function renderVendedor() {
   document.querySelectorAll('.corteLabelInline').forEach(e => e.textContent = getCorteLabel());
 
   const map = {};
-  CORTE_DATA.transportistas.forEach(r => {
+  CORTE_DATA.ventas.forEach(r => {
     const key = vendedorKey(r);
-    if (!map[key]) map[key] = { cod: key, facturado: 0, ventaReal: 0, monto: 0, pedidos: 0 };
-    const facturado = Number(r.totdsp) || 0;
-    const entregado = Number(r.totent) || 0;
-    map[key].facturado += facturado;
-    map[key].ventaReal += entregado;
-    const rechazado = facturado - entregado;
-    if (rechazado > 0.01) {
-      map[key].monto += rechazado;
+    if (!map[key]) map[key] = { cod: key, facturado: 0, monto: 0, pedidos: 0 };
+    const soles = Number(r.soles) || 0;
+    if (r.vtadvo === 'V') {
+      map[key].facturado += soles;
+    } else if (r.vtadvo === 'D') {
+      map[key].monto += -soles;
       map[key].pedidos += 1;
     }
   });
-  const all = Object.values(map).map(r => ({ ...r, pct: r.facturado ? r.monto / r.facturado : 0 }));
+  const all = Object.values(map).map(r => ({ ...r, ventaReal: r.facturado - r.monto, pct: r.facturado ? r.monto / r.facturado : 0 }));
 
   const totals = all.reduce((a, r) => ({ facturado: a.facturado + r.facturado, ventaReal: a.ventaReal + r.ventaReal, monto: a.monto + r.monto, pedidos: a.pedidos + r.pedidos }), { facturado: 0, ventaReal: 0, monto: 0, pedidos: 0 });
   const totalPct = totals.facturado ? totals.monto / totals.facturado : 0;
@@ -564,7 +603,7 @@ function renderVendedor() {
   trT.appendChild(el('td'));
   tfoot.appendChild(trT);
 
-  document.getElementById('vend-note').textContent = `Datos reales de Transportistas (${getCorteLabel()}) · estos montos cuadran con Por conductor y Vista general · haz clic en un vendedor para ver sus documentos.`;
+  document.getElementById('vend-note').textContent = `Datos reales de Ventas (${getCorteLabel()}) · estos montos cuadran con Por conductor y Vista general · haz clic en un vendedor para ver sus documentos.`;
 }
 
 function goToDocs({ chofer, vendedor } = {}) {
@@ -598,7 +637,7 @@ function populateDocFilterOptions(rows) {
   state.doc.vendor = vendorSel.value;
 
   const choferMap = {};
-  rows.forEach(r => { if (r.codcho) choferMap[r.codcho] = r.nomcho || r.codcho; });
+  rows.forEach(r => { if (r._chofer && r._chofer.codcho) choferMap[r._chofer.codcho] = r._chofer.nomcho || r._chofer.codcho; });
   const choferCods = Object.keys(choferMap).sort((a, b) => choferMap[a].localeCompare(choferMap[b]));
   choferSel.innerHTML = '';
   choferSel.appendChild(new Option('Todos', 'all'));
@@ -606,7 +645,7 @@ function populateDocFilterOptions(rows) {
   choferSel.value = choferCods.includes(prevChofer) ? prevChofer : 'all';
   state.doc.chofer = choferSel.value;
 
-  const motivos = Array.from(new Set(rows.map(r => r.desmot).filter(Boolean))).sort();
+  const motivos = Array.from(new Set(rows.map(r => r._chofer && r._chofer.desmot).filter(Boolean))).sort();
   motivoSel.innerHTML = '';
   motivoSel.appendChild(new Option('Todos', 'all'));
   motivos.forEach(m => motivoSel.appendChild(new Option(m, m)));
@@ -619,11 +658,12 @@ function filteredDocRows() {
   const min = state.doc.montoMin === '' ? null : parseFloat(state.doc.montoMin);
   const max = state.doc.montoMax === '' ? null : parseFloat(state.doc.montoMax);
   return DOC_ROWS_CACHE.filter(r => {
-    if (q && !((String(buildDocNumber(r) || '')).toLowerCase().includes(q) || (String(r.nomcli || '')).toLowerCase().includes(q))) return false;
+    const choferCod = r._chofer ? r._chofer.codcho : null;
+    if (q && !((String(ventasDocNumber(r) || '')).toLowerCase().includes(q) || (String(r.nombrecliente || '')).toLowerCase().includes(q))) return false;
     if (state.doc.vendor !== 'all' && vendedorKey(r) !== state.doc.vendor) return false;
-    if (state.doc.chofer !== 'all' && r.codcho !== state.doc.chofer) return false;
-    if (state.doc.motivo !== 'all' && r.desmot !== state.doc.motivo) return false;
-    const monto = transpRechazo(r);
+    if (state.doc.chofer !== 'all' && choferCod !== state.doc.chofer) return false;
+    if (state.doc.motivo !== 'all' && (r._chofer && r._chofer.desmot) !== state.doc.motivo) return false;
+    const monto = -(Number(r.soles) || 0);
     if (min !== null && monto < min) return false;
     if (max !== null && monto > max) return false;
     return true;
@@ -632,9 +672,9 @@ function filteredDocRows() {
 
 function drawDocumentos() {
   const rows = filteredDocRows();
-  const sum = rows.reduce((s, r) => s + transpRechazo(r), 0);
+  const sum = rows.reduce((s, r) => s + (-(Number(r.soles) || 0)), 0);
   const avg = rows.length ? sum / rows.length : 0;
-  const clientes = new Set(rows.map(r => r.nomcli)).size;
+  const clientes = new Set(rows.map(r => r.nombrecliente)).size;
 
   const kpis = document.getElementById('doc-kpis');
   kpis.innerHTML = '';
@@ -643,7 +683,7 @@ function drawDocumentos() {
   kpis.appendChild(kpiCard('teal', 'Promedio por documento', fmtMoney(avg)));
   kpis.appendChild(kpiCard('navy', 'Clientes únicos', clientes));
 
-  document.getElementById('doc-result-label').textContent = `${rows.length} documento(s) encontrado(s) · Transportistas`;
+  document.getElementById('doc-result-label').textContent = `${rows.length} documento(s) encontrado(s) · Ventas (devoluciones)`;
 
   const pageSize = 8;
   const maxPage = Math.max(0, Math.ceil(rows.length / pageSize) - 1);
@@ -658,14 +698,15 @@ function drawDocumentos() {
   const tbody = table.querySelector('tbody');
   tbody.innerHTML = '';
   pageRows.forEach(r => {
+    const chofer = r._chofer ? (r._chofer.nomcho || r._chofer.codcho) : null;
     const tr = el('tr');
-    tr.appendChild(el('td', 'mono', buildDocNumber(r) || ''));
-    tr.appendChild(el('td', 'mono muted', fmtFecha(r.fecemi)));
-    tr.appendChild(el('td', null, r.nomcli || ''));
-    tr.appendChild(el('td', 'mono muted', r.nomcho || r.codcho || ''));
-    tr.appendChild(el('td', 'mono muted', vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.codven] || ('Vendedor ' + r.codven))));
-    tr.appendChild(el('td', 'num rej', fmtMoney(transpRechazo(r))));
-    tr.appendChild(el('td', 'muted', r.desmot || ''));
+    tr.appendChild(el('td', 'mono', ventasDocNumber(r) || ''));
+    tr.appendChild(el('td', 'mono muted', fmtFecha(r.fecha)));
+    tr.appendChild(el('td', null, r.nombrecliente || ''));
+    tr.appendChild(el('td', 'mono muted', chofer || '<span class="muted" style="font-style:italic">sin identificar</span>'));
+    tr.appendChild(el('td', 'mono muted', vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.vendedor] || r.nombrevendedor || ('Vendedor ' + r.vendedor))));
+    tr.appendChild(el('td', 'num rej', fmtMoney(-(Number(r.soles) || 0))));
+    tr.appendChild(el('td', 'muted', (r._chofer && r._chofer.desmot) || ''));
     tbody.appendChild(tr);
   });
 
@@ -679,7 +720,8 @@ function exportDocumentosCSV() {
   const header = ['Documento', 'Fecha', 'Cliente', 'Chofer', 'Vendedor', 'Monto', 'Motivo'];
   const lines = [header.map(csvEscape).join(',')];
   rows.forEach(r => {
-    lines.push([buildDocNumber(r), toISO(r.fecemi), r.nomcli, r.nomcho || r.codcho, vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.codven] || r.codven), transpRechazo(r).toFixed(2), r.desmot].map(csvEscape).join(','));
+    const chofer = r._chofer ? (r._chofer.nomcho || r._chofer.codcho) : '';
+    lines.push([ventasDocNumber(r), toISO(r.fecha), r.nombrecliente, chofer, vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.vendedor] || r.vendedor), (-(Number(r.soles) || 0)).toFixed(2), (r._chofer && r._chofer.desmot) || ''].map(csvEscape).join(','));
   });
   downloadBlob(`documentos_rechazados_${state.doc.from || 'todos'}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
 }
