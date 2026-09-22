@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js versión 3 (fix: colisión de nombre "supabase")');
+console.log('Panel de Rechazos — app.js versión 8 (fix: Documento compuesto también en Transportistas)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -111,6 +111,20 @@ function monthsBetween(from, to) {
 function csvEscape(v) {
   const s = String(v == null ? '' : v);
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function cleanRefDoc(raw) {
+  // El Excel sin fórmulas trae "referencia" sucio, ej. "BO    B002-00130268"
+  // (espacios de más + guión). Quitándolos queda "BOB00200130268", que es
+  // el mismo formato que usa "Documento" en Transportistas.
+  if (raw == null) return null;
+  const s = String(raw).replace(/\s+/g, '').replace(/-/g, '').trim();
+  return s || null;
+}
+function buildDocNumber(r) {
+  // Ni Transportistas ni Contabilidad NC traen un "Documento" en una sola
+  // columna en el Excel sin fórmulas: en ambos se arma con
+  // coddoc + sersun + numsun (ej. "BO"+"B002"+"00130369" = "BOB00200130369").
+  return `${r.coddoc || ''}${r.sersun || ''}${r.numsun || ''}` || null;
 }
 function downloadBlob(filename, content, mime) {
   const blob = new Blob([content], { type: mime });
@@ -254,18 +268,19 @@ function renderGeneral() {
 
   const docToChofer = {};
   CORTE_DATA.transportistas.forEach(r => {
-    if (r.Documento) docToChofer[r.Documento] = r.nomcho || r.codcho || 'Sin identificar';
+    const docNum = buildDocNumber(r);
+    if (docNum) docToChofer[docNum] = r.nomcho || r.codcho || 'Sin identificar';
   });
 
   const cross = [];
   let matched = 0;
   CORTE_DATA.nc.forEach(r => {
-    const ref = r['Factura/Boleta'];
+    const ref = cleanRefDoc(r.referencia);
     if (!ref) return;
     const chofer = docToChofer[ref];
     if (!chofer) return;
     matched++;
-    cross.push({ chofer, vendedor: r.vendedor || '—', monto: Number(r.monimp) || 0 });
+    cross.push({ chofer, vendedor: r.vendedor || '—', monto: Number(r.mondoc) || 0 });
   });
 
   const kpis = document.getElementById('cross-kpis');
@@ -345,10 +360,18 @@ function aggregateConductor() {
   CORTE_DATA.transportistas.forEach(r => {
     const key = r.codcho || '—';
     if (!map[key]) map[key] = { cod: key, nombre: r.nomcho || key, facturado: 0, ventaReal: 0, monto: 0, pedidos: 0 };
-    map[key].facturado += Number(r.totdsp) || 0;
-    map[key].ventaReal += Number(r.totent) || 0;
-    map[key].monto += Number(r.totfal) || 0;
-    if ((Number(r.totfal) || 0) > 0) map[key].pedidos += 1;
+    const facturado = Number(r.totdsp) || 0;
+    const entregado = Number(r.totent) || 0;
+    // El "monto rechazado" real NO viene en una columna directa (totfal suele
+    // venir en 0) — se calcula como despachado menos entregado, igual que en
+    // el Excel original.
+    const rechazado = facturado - entregado;
+    map[key].facturado += facturado;
+    map[key].ventaReal += entregado;
+    if (rechazado > 0.01) {
+      map[key].monto += rechazado;
+      map[key].pedidos += 1;
+    }
   });
   return Object.values(map).map(r => ({ ...r, pct: r.facturado ? r.monto / r.facturado : 0 }));
 }
@@ -443,7 +466,7 @@ function renderVendedor() {
   CORTE_DATA.nc.forEach(r => {
     const key = r.vendedor || '—';
     if (!ncMap[key]) ncMap[key] = { cod: key, monto: 0, docs: 0 };
-    ncMap[key].monto += Number(r.monimp) || 0;
+    ncMap[key].monto += Number(r.mondoc) || 0;
     ncMap[key].docs += 1;
   });
 
@@ -451,8 +474,12 @@ function renderVendedor() {
   CORTE_DATA.ventas.forEach(r => {
     const key = r.vendedor || '—';
     if (!ventasByVendor[key]) ventasByVendor[key] = { facturado: 0, ventaReal: 0 };
-    ventasByVendor[key].facturado += Number(r.soles) || 0;
-    ventasByVendor[key].ventaReal += Number(r.vtadvo) || 0;
+    const soles = Number(r.soles) || 0;
+    // "vtadvo" NO es un monto (viene como código de texto, ej. "V") — a
+    // diferencia de Transportistas, Ventas no trae un segundo monto de
+    // "entregado" separado del facturado, así que usamos el mismo valor.
+    ventasByVendor[key].facturado += soles;
+    ventasByVendor[key].ventaReal += soles;
   });
   const hayVentas = CORTE_DATA.ventas.length > 0;
 
@@ -561,18 +588,18 @@ function filteredDocRows() {
   const min = state.doc.montoMin === '' ? null : parseFloat(state.doc.montoMin);
   const max = state.doc.montoMax === '' ? null : parseFloat(state.doc.montoMax);
   return DOC_ROWS_CACHE.filter(r => {
-    if (q && !((String(r.Documento || '')).toLowerCase().includes(q) || (String(r.razsoc || '')).toLowerCase().includes(q))) return false;
+    if (q && !((String(buildDocNumber(r) || '')).toLowerCase().includes(q) || (String(r.razsoc || '')).toLowerCase().includes(q))) return false;
     if (state.doc.vendor !== 'all' && r.vendedor !== state.doc.vendor) return false;
     if (state.doc.motivo !== 'all' && r.motivo !== state.doc.motivo) return false;
-    if (min !== null && (Number(r.monimp) || 0) < min) return false;
-    if (max !== null && (Number(r.monimp) || 0) > max) return false;
+    if (min !== null && (Number(r.mondoc) || 0) < min) return false;
+    if (max !== null && (Number(r.mondoc) || 0) > max) return false;
     return true;
   });
 }
 
 function drawDocumentos() {
   const rows = filteredDocRows();
-  const sum = rows.reduce((s, r) => s + (Number(r.monimp) || 0), 0);
+  const sum = rows.reduce((s, r) => s + (Number(r.mondoc) || 0), 0);
   const avg = rows.length ? sum / rows.length : 0;
   const clientes = new Set(rows.map(r => r.razsoc)).size;
 
@@ -599,12 +626,12 @@ function drawDocumentos() {
   tbody.innerHTML = '';
   pageRows.forEach(r => {
     const tr = el('tr');
-    tr.appendChild(el('td', 'mono', r.Documento || ''));
-    tr.appendChild(el('td', 'mono', r['Factura/Boleta'] || `<span class="muted">— (${(r.estdoc || 'sin ref.').toLowerCase()})</span>`));
+    tr.appendChild(el('td', 'mono', buildDocNumber(r) || ''));
+    tr.appendChild(el('td', 'mono', cleanRefDoc(r.referencia) || `<span class="muted">— (${(r.estdoc || 'sin ref.').toLowerCase()})</span>`));
     tr.appendChild(el('td', 'mono muted', fmtFecha(r.emision)));
     tr.appendChild(el('td', null, r.razsoc || ''));
     tr.appendChild(el('td', 'mono muted', VENDOR_NAMES[r.vendedor] || (r.vendedor ? 'Vendedor ' + r.vendedor : '')));
-    tr.appendChild(el('td', 'num rej', fmtMoney(r.monimp)));
+    tr.appendChild(el('td', 'num rej', fmtMoney(r.mondoc)));
     tr.appendChild(el('td', 'muted', r.motivo || ''));
     tbody.appendChild(tr);
   });
@@ -619,7 +646,7 @@ function exportDocumentosCSV() {
   const header = ['Nota de Credito', 'Doc. Referencia', 'Fecha', 'Cliente', 'Vendedor', 'Monto', 'Motivo'];
   const lines = [header.map(csvEscape).join(',')];
   rows.forEach(r => {
-    lines.push([r.Documento, r['Factura/Boleta'] || 'SIN REFERENCIA', toISO(r.emision), r.razsoc, r.vendedor, (Number(r.monimp) || 0).toFixed(2), r.motivo].map(csvEscape).join(','));
+    lines.push([buildDocNumber(r), cleanRefDoc(r.referencia) || 'SIN REFERENCIA', toISO(r.emision), r.razsoc, r.vendedor, (Number(r.mondoc) || 0).toFixed(2), r.motivo].map(csvEscape).join(','));
   });
   downloadBlob(`documentos_rechazados_${state.doc.from || 'todos'}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
 }
@@ -716,6 +743,7 @@ const loginSubmitBtn = document.getElementById('loginSubmitBtn');
 const loginSpinner = document.getElementById('loginSpinner');
 const loginBtnText = document.getElementById('loginBtnText');
 const logoutBtn = document.getElementById('logoutBtn');
+const userEmailLabel = document.getElementById('userEmailLabel');
 
 // Cierre de sesión automático por inactividad (30 min — ajusta si quieres).
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
@@ -741,9 +769,10 @@ function stopInactivityTimer() {
 
 let appBooted = false;
 
-async function showApp() {
+async function showApp(session) {
   loginScreen.style.display = 'none';
   appRoot.style.display = '';
+  if (userEmailLabel) userEmailLabel.textContent = session?.user?.email || '';
   sessionActive = true;
   resetInactivityTimer();
 
@@ -778,14 +807,14 @@ function showLogin() {
 // solo en memoria y se pierde al recargar — pero se deja por si en el futuro
 // se cambia a sessionStorage) y reacciona a cualquier cambio después.
 supabaseClient.auth.getSession().then(({ data: { session } }) => {
-  if (session) { showApp(); } else { showLogin(); }
+  if (session) { showApp(session); } else { showLogin(); }
 }).catch(err => {
   console.error('Error revisando sesión existente:', err);
   showLogin();
 });
 
 supabaseClient.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_IN' && session) showApp();
+  if (event === 'SIGNED_IN' && session) showApp(session);
   if (event === 'SIGNED_OUT') showLogin();
 });
 
