@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js versión 10 (corte acumulado, alineación %, dise00f1o refinado)');
+console.log('Panel de Rechazos — app.js version 11 (una sola fuente de verdad: Transportistas)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -38,11 +38,11 @@ const state = {
   diaSel: null,           // 'YYYY-MM-DD'
   cond: { search: '', onlyAlerts: false, umbral: 2, sortKey: 'pct', sortDir: 'desc' },
   vend: { search: '' },
-  doc:  { search: '', vendor: 'all', motivo: 'all', montoMin: '', montoMax: '', from: null, to: null, page: 0 },
+  doc:  { search: '', vendor: 'all', chofer: 'all', motivo: 'all', montoMin: '', montoMax: '', from: null, to: null, page: 0 },
 };
 
 let VENDOR_NAMES = {};                              // código -> nombre (se llena desde Ventas)
-let CORTE_DATA = { transportistas: [], ventas: [], nc: [] };
+let CORTE_DATA = { transportistas: [], ventas: [] };
 const FILE_CACHE = {};                              // 'Transportistas/Transportistas_2026-09.xlsx' -> filas ya parseadas
 
 /* ---------------- utilidades ---------------- */
@@ -111,14 +111,6 @@ function monthsBetween(from, to) {
 function csvEscape(v) {
   const s = String(v == null ? '' : v);
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
-function cleanRefDoc(raw) {
-  // El Excel sin fórmulas trae "referencia" sucio, ej. "BO    B002-00130268"
-  // (espacios de más + guión). Quitándolos queda "BOB00200130268", que es
-  // el mismo formato que usa "Documento" en Transportistas.
-  if (raw == null) return null;
-  const s = String(raw).replace(/\s+/g, '').replace(/-/g, '').trim();
-  return s || null;
 }
 function buildDocNumber(r) {
   // Ni Transportistas ni Contabilidad NC traen un "Documento" en una sola
@@ -237,42 +229,54 @@ async function onCorteChanged() {
 
 /* ---------------- carga de datos del corte activo ---------------- */
 
-function esRechazoReal(motivo) {
-  // "Rechazo" en este panel = notas de crédito por DEVOLUCIÓN de ítem
-  // (mercadería rechazada). Excluye "Descuento por ítem", que es un
-  // ajuste comercial, no un rechazo de pedido.
-  return !!(motivo && /DEVOLUCION/i.test(motivo));
+function transpRechazo(r) {
+  // El "monto rechazado" real no viene en una columna directa: se calcula
+  // como despachado menos entregado (igual que en el Excel original).
+  return (Number(r.totdsp) || 0) - (Number(r.totent) || 0);
+}
+function esPedidoRechazado(r) {
+  return transpRechazo(r) > 0.01;
+}
+function vendedorKey(r) {
+  return r.codven || 'OFICINA';
+}
+function vendedorLabel(cod) {
+  if (!cod || cod === 'OFICINA') return 'Vendedor Oficina';
+  return VENDOR_NAMES[cod] || ('Vendedor ' + cod);
 }
 
 async function loadCorteData() {
   const periodo = state.modo === 'dia' ? state.diaSel.slice(0, 7) : state.mesSel;
-  const [t, v, n] = await Promise.all([
+  const [t, v] = await Promise.all([
     loadModuleFile('Transportistas', 'Transportistas', periodo),
     loadModuleFile('Ventas', 'Ventas', periodo),
-    loadModuleFile('ContabilidadNC', 'ContabilidadNC', periodo),
   ]);
 
-  let transportistas = t, ventas = v, nc = n.filter(r => esRechazoReal(r.motivo));
+  let transportistas = t, ventas = v;
   if (state.modo === 'dia') {
     const d = state.diaSel;
     transportistas = transportistas.filter(r => toISO(r.fecemi) === d);
     ventas = ventas.filter(r => toISO(r.fecha) === d);
-    nc = nc.filter(r => toISO(r.emision) === d);
   }
-  CORTE_DATA = { transportistas, ventas, nc };
+  CORTE_DATA = { transportistas, ventas };
 
-  // Nombres de vendedor: se arman con lo que haya en Ventas de este corte.
-  ventas.forEach(r => { if (r.vendedor && r.nombrevendedor) VENDOR_NAMES[r.vendedor] = r.nombrevendedor; });
+  // Nombres de vendedor: Transportistas ya trae nomvnd directo (más
+  // confiable), y Ventas complementa si hace falta.
+  transportistas.forEach(r => { if (r.codven && r.nomvnd) VENDOR_NAMES[r.codven] = r.nomvnd; });
+  ventas.forEach(r => { if (r.vendedor && r.nombrevendedor && !VENDOR_NAMES[r.vendedor]) VENDOR_NAMES[r.vendedor] = r.nombrevendedor; });
 }
 
 async function loadDocumentosData() {
+  // "Documentos rechazados" = pedidos rechazados reales de Transportistas
+  // (un pedido = un documento), no notas de crédito — así los montos
+  // siempre cuadran con Vista general y Por conductor/vendedor.
   if (!state.doc.from || !state.doc.to) return [];
   const periodos = monthsBetween(state.doc.from, state.doc.to);
-  const arrays = await Promise.all(periodos.map(p => loadModuleFile('ContabilidadNC', 'ContabilidadNC', p)));
+  const arrays = await Promise.all(periodos.map(p => loadModuleFile('Transportistas', 'Transportistas', p)));
   const all = arrays.flat();
   return all.filter(r => {
-    if (!esRechazoReal(r.motivo)) return false;
-    const iso = toISO(r.emision);
+    if (!esPedidoRechazado(r)) return false;
+    const iso = toISO(r.fecemi);
     return iso && iso >= state.doc.from && iso <= state.doc.to;
   });
 }
@@ -282,41 +286,40 @@ async function loadDocumentosData() {
 function renderGeneral() {
   document.querySelectorAll('.corteLabelInline').forEach(e => e.textContent = getCorteLabel());
 
-  const docToChofer = {};
-  CORTE_DATA.transportistas.forEach(r => {
-    const docNum = buildDocNumber(r);
-    if (docNum) docToChofer[docNum] = r.nomcho || r.codcho || 'Sin identificar';
-  });
-
   const cross = [];
-  let matched = 0;
-  CORTE_DATA.nc.forEach(r => {
-    const ref = cleanRefDoc(r.referencia);
-    if (!ref) return;
-    const chofer = docToChofer[ref];
-    if (!chofer) return;
-    matched++;
-    cross.push({ chofer, vendedor: r.vendedor || '—', monto: Number(r.mondoc) || 0 });
+  CORTE_DATA.transportistas.forEach(r => {
+    const monto = transpRechazo(r);
+    if (monto <= 0.01) return;
+    cross.push({
+      choferCod: r.codcho || '—',
+      chofer: r.nomcho || r.codcho || 'Sin identificar',
+      vendCod: vendedorKey(r),
+      monto,
+    });
   });
 
   const kpis = document.getElementById('cross-kpis');
   kpis.innerHTML = '';
-  kpis.appendChild(kpiCard('navy', 'Documentos cruzados', `${matched} de ${CORTE_DATA.nc.length}`));
-  kpis.appendChild(kpiCard('teal', 'Choferes involucrados', new Set(cross.map(c => c.chofer)).size));
-  kpis.appendChild(kpiCard('red', 'Monto cruzado', fmtMoney(cross.reduce((s, c) => s + c.monto, 0))));
+  kpis.appendChild(kpiCard('navy', 'Pedidos rechazados', cross.length));
+  kpis.appendChild(kpiCard('teal', 'Choferes involucrados', new Set(cross.map(c => c.choferCod)).size));
+  kpis.appendChild(kpiCard('red', 'Monto total rechazado', fmtMoney(cross.reduce((s, c) => s + c.monto, 0))));
 
-  const vendCols = Array.from(new Set(cross.map(c => c.vendedor))).sort();
-  const choferes = Array.from(new Set(cross.map(c => c.chofer))).sort();
+  const vendCols = Array.from(new Set(cross.map(c => c.vendCod))).sort();
+  const choferCods = Array.from(new Set(cross.map(c => c.choferCod)));
+  const choferNombre = {};
+  cross.forEach(c => { choferNombre[c.choferCod] = c.chofer; });
+  choferCods.sort((a, b) => (choferNombre[a] || '').localeCompare(choferNombre[b] || ''));
+
   const matrix = {};
-  choferes.forEach(c => matrix[c] = {});
-  cross.forEach(c => { matrix[c.chofer][c.vendedor] = (matrix[c.chofer][c.vendedor] || 0) + c.monto; });
+  choferCods.forEach(c => matrix[c] = {});
+  cross.forEach(c => { matrix[c.choferCod][c.vendCod] = (matrix[c.choferCod][c.vendCod] || 0) + c.monto; });
 
   const table = document.getElementById('cross-table');
   const thead = table.querySelector('thead'), tbody = table.querySelector('tbody'), tfoot = table.querySelector('tfoot');
   thead.innerHTML = ''; tbody.innerHTML = ''; tfoot.innerHTML = '';
 
-  if (!choferes.length) {
-    document.getElementById('cross-note').textContent = 'No hay coincidencias todavía entre las notas de crédito y los documentos de Transportistas en este periodo.';
+  if (!choferCods.length) {
+    document.getElementById('cross-note').textContent = 'No hay pedidos rechazados en este periodo.';
     return;
   }
 
@@ -331,7 +334,7 @@ function renderGeneral() {
   const trHead = el('tr'); trHead.style.background = '#F5F3ED';
   trHead.appendChild(el('th', null, 'Chofer'));
   vendCols.forEach(v => {
-    const th = el('th', null, VENDOR_NAMES[v] ? VENDOR_NAMES[v].toUpperCase() : ('VEND. ' + v));
+    const th = el('th', null, vendedorLabel(v).toUpperCase());
     th.style.textAlign = 'center';
     trHead.appendChild(th);
   });
@@ -339,34 +342,43 @@ function renderGeneral() {
 
   const colTotals = vendCols.map(() => 0);
   let grandTotal = 0;
-  choferes.forEach(ch => {
+  choferCods.forEach(ch => {
     const tr = el('tr');
-    tr.appendChild(el('td', null, ch.toUpperCase()));
+    tr.appendChild(el('td', null, (choferNombre[ch] || ch).toUpperCase()));
     let rowTotal = 0;
     vendCols.forEach((v, i) => {
       const val = matrix[ch][v];
       const td = el('td', 'num rej', val ? val.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
       td.style.textAlign = 'center';
+      if (val) {
+        td.classList.add('clickable');
+        td.title = 'Ver documentos rechazados';
+        td.addEventListener('click', () => goToDocs({ chofer: ch, vendedor: v }));
+      }
       tr.appendChild(td);
       if (val) { rowTotal += val; colTotals[i] += val; }
     });
     grandTotal += rowTotal;
-    tr.appendChild(el('td', 'num rej', rowTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
+    const tdTotal = el('td', 'num rej clickable', rowTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    tdTotal.title = 'Ver documentos rechazados de este chofer';
+    tdTotal.addEventListener('click', () => goToDocs({ chofer: ch }));
+    tr.appendChild(tdTotal);
     tbody.appendChild(tr);
   });
 
   const trFoot = el('tr');
   trFoot.appendChild(el('td', null, 'Total general'));
-  colTotals.forEach(t => {
+  colTotals.forEach((t, i) => {
     const td = el('td', 'num rej', t.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
     td.style.textAlign = 'center';
+    if (t) { td.classList.add('clickable'); td.title = 'Ver documentos rechazados'; td.addEventListener('click', () => goToDocs({ vendedor: vendCols[i] })); }
     trFoot.appendChild(td);
   });
   trFoot.appendChild(el('td', 'num rej', grandTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
   tfoot.appendChild(trFoot);
 
   document.getElementById('cross-note').textContent =
-    'Cruce real: enlaza el N° de Documento Referencia de cada nota de crédito contra el chofer de ese mismo documento en Transportistas.';
+    'Chofer y vendedor vienen de la misma fila de Transportistas, así que estos montos siempre cuadran con Por conductor y Por vendedor. Haz clic en cualquier celda para ver esos documentos.';
 }
 
 /* ---------------- Por conductor ---------------- */
@@ -427,6 +439,7 @@ function renderConductor() {
     <th style="text-align:right"><button data-sort="monto">Monto rech.</button></th>
     <th style="text-align:right"><button data-sort="pedidos">Pedidos</button></th>
     <th><button data-sort="pct">% Rechazo</button></th>
+    <th style="width:20px"></th>
   </tr>`;
   thead.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     const k = b.dataset.sort;
@@ -437,13 +450,15 @@ function renderConductor() {
 
   tbody.innerHTML = '';
   rows.forEach(r => {
-    const tr = el('tr');
+    const tr = el('tr', 'clickable');
+    tr.addEventListener('click', () => goToDocs({ chofer: r.cod }));
     tr.appendChild(el('td', null, `${r.nombre}<div class="sub">${r.cod}</div>`));
     tr.appendChild(el('td', 'num', fmtMoney(r.facturado)));
     tr.appendChild(el('td', 'num muted', fmtMoney(r.ventaReal)));
     tr.appendChild(el('td', 'num rej', fmtMoney(r.monto)));
     tr.appendChild(el('td', 'num', r.pedidos));
     tr.appendChild(pctCell(r.pct, state.cond.umbral));
+    tr.appendChild(el('td', 'muted', '&rsaquo;'));
     tbody.appendChild(tr);
   });
 
@@ -455,9 +470,10 @@ function renderConductor() {
   trT.appendChild(el('td', 'num rej', fmtMoney(totals.monto)));
   trT.appendChild(el('td', 'num', totals.pedidos));
   trT.appendChild(pctCell(totalPct, state.cond.umbral));
+  trT.appendChild(el('td'));
   tfoot.appendChild(trT);
 
-  document.getElementById('cond-note').textContent = `Mostrando ${rows.length} de ${all.length} conductores · datos reales de Transportistas (${getCorteLabel()}).`;
+  document.getElementById('cond-note').textContent = `Mostrando ${rows.length} de ${all.length} conductores · datos reales de Transportistas (${getCorteLabel()}) · haz clic en un conductor para ver sus documentos.`;
 }
 
 function pctCell(pct, umbral) {
@@ -478,43 +494,35 @@ function pctCell(pct, umbral) {
 function renderVendedor() {
   document.querySelectorAll('.corteLabelInline').forEach(e => e.textContent = getCorteLabel());
 
-  const ncMap = {};
-  CORTE_DATA.nc.forEach(r => {
-    const key = r.vendedor || '—';
-    if (!ncMap[key]) ncMap[key] = { cod: key, monto: 0, docs: 0 };
-    ncMap[key].monto += Number(r.mondoc) || 0;
-    ncMap[key].docs += 1;
+  const map = {};
+  CORTE_DATA.transportistas.forEach(r => {
+    const key = vendedorKey(r);
+    if (!map[key]) map[key] = { cod: key, facturado: 0, ventaReal: 0, monto: 0, pedidos: 0 };
+    const facturado = Number(r.totdsp) || 0;
+    const entregado = Number(r.totent) || 0;
+    map[key].facturado += facturado;
+    map[key].ventaReal += entregado;
+    const rechazado = facturado - entregado;
+    if (rechazado > 0.01) {
+      map[key].monto += rechazado;
+      map[key].pedidos += 1;
+    }
   });
+  const all = Object.values(map).map(r => ({ ...r, pct: r.facturado ? r.monto / r.facturado : 0 }));
 
-  const ventasByVendor = {};
-  CORTE_DATA.ventas.forEach(r => {
-    const key = r.vendedor || '—';
-    if (!ventasByVendor[key]) ventasByVendor[key] = { facturado: 0, ventaReal: 0 };
-    const soles = Number(r.soles) || 0;
-    // "vtadvo" NO es un monto (viene como código de texto, ej. "V") — a
-    // diferencia de Transportistas, Ventas no trae un segundo monto de
-    // "entregado" separado del facturado, así que usamos el mismo valor.
-    ventasByVendor[key].facturado += soles;
-    ventasByVendor[key].ventaReal += soles;
-  });
-  const hayVentas = CORTE_DATA.ventas.length > 0;
-
-  const montoTotal = Object.values(ncMap).reduce((s, v) => s + v.monto, 0);
-  const docsTotal = CORTE_DATA.nc.length;
-  const facturadoTotal = Object.values(ventasByVendor).reduce((s, v) => s + v.facturado, 0);
-  const ventaRealTotal = Object.values(ventasByVendor).reduce((s, v) => s + v.ventaReal, 0);
-  const pctTotal = facturadoTotal ? montoTotal / facturadoTotal : 0;
+  const totals = all.reduce((a, r) => ({ facturado: a.facturado + r.facturado, ventaReal: a.ventaReal + r.ventaReal, monto: a.monto + r.monto, pedidos: a.pedidos + r.pedidos }), { facturado: 0, ventaReal: 0, monto: 0, pedidos: 0 });
+  const totalPct = totals.facturado ? totals.monto / totals.facturado : 0;
 
   const kpis = document.getElementById('vend-kpis');
   kpis.innerHTML = '';
-  kpis.appendChild(kpiCard('navy', 'Facturado', hayVentas ? fmtMoney(facturadoTotal) : 'pendiente', !hayVentas));
-  kpis.appendChild(kpiCard('teal', 'Venta real', hayVentas ? fmtMoney(ventaRealTotal) : 'pendiente', !hayVentas));
-  kpis.appendChild(kpiCard('red', 'Monto rechazado', fmtMoney(montoTotal)));
-  kpis.appendChild(kpiCard('navy', '% Rechazo global', hayVentas ? fmtPct(pctTotal) : 'pendiente', !hayVentas));
+  kpis.appendChild(kpiCard('navy', 'Facturado', fmtMoney(totals.facturado)));
+  kpis.appendChild(kpiCard('teal', 'Venta real', fmtMoney(totals.ventaReal)));
+  kpis.appendChild(kpiCard('red', 'Monto rechazado', fmtMoney(totals.monto)));
+  kpis.appendChild(kpiCard('navy', '% Rechazo global', fmtPct(totalPct)));
 
   const q = state.vend.search.toLowerCase();
-  let rows = Object.values(ncMap).filter(v => {
-    const nm = (VENDOR_NAMES[v.cod] || '').toLowerCase();
+  let rows = all.filter(v => {
+    const nm = vendedorLabel(v.cod).toLowerCase();
     return !q || String(v.cod).toLowerCase().includes(q) || nm.includes(q);
   }).sort((a, b) => b.monto - a.monto);
 
@@ -532,20 +540,15 @@ function renderVendedor() {
 
   tbody.innerHTML = '';
   rows.forEach(v => {
-    const vv = ventasByVendor[v.cod];
-    const facturado = vv ? vv.facturado : null;
-    const ventaReal = vv ? vv.ventaReal : null;
-    const pct = facturado ? v.monto / facturado : null;
-
     const tr = el('tr', 'clickable');
-    tr.addEventListener('click', () => goToVendorDocs(v.cod));
-    const nombre = VENDOR_NAMES[v.cod];
-    tr.appendChild(el('td', null, nombre ? `${nombre}<div class="sub">Vendedor ${v.cod}</div>` : `Vendedor ${v.cod}<div class="sub" style="font-style:italic">nombre pendiente</div>`));
-    tr.appendChild(el('td', 'num', facturado != null ? fmtMoney(facturado) : '<span class="muted" style="font-style:italic">pendiente</span>'));
-    tr.appendChild(el('td', 'num', ventaReal != null ? fmtMoney(ventaReal) : '<span class="muted" style="font-style:italic">pendiente</span>'));
+    tr.addEventListener('click', () => goToDocs({ vendedor: v.cod }));
+    const nombre = v.cod === 'OFICINA' ? 'Vendedor Oficina' : VENDOR_NAMES[v.cod];
+    tr.appendChild(el('td', null, nombre ? `${nombre}${v.cod === 'OFICINA' ? '' : `<div class="sub">Vendedor ${v.cod}</div>`}` : `Vendedor ${v.cod}<div class="sub" style="font-style:italic">nombre pendiente</div>`));
+    tr.appendChild(el('td', 'num', fmtMoney(v.facturado)));
+    tr.appendChild(el('td', 'num muted', fmtMoney(v.ventaReal)));
     tr.appendChild(el('td', 'num rej', fmtMoney(v.monto)));
-    tr.appendChild(el('td', 'num', v.docs));
-    tr.appendChild(pct != null ? pctCell(pct, state.cond.umbral) : el('td', 'muted', '<span style="font-style:italic">pendiente</span>'));
+    tr.appendChild(el('td', 'num', v.pedidos));
+    tr.appendChild(pctCell(v.pct, state.cond.umbral));
     tr.appendChild(el('td', 'muted', '&rsaquo;'));
     tbody.appendChild(tr);
   });
@@ -553,19 +556,21 @@ function renderVendedor() {
   tfoot.innerHTML = '';
   const trT = el('tr');
   trT.appendChild(el('td', null, 'Total general'));
-  trT.appendChild(el('td', 'num', hayVentas ? fmtMoney(facturadoTotal) : '<span class="muted" style="font-style:italic">pendiente</span>'));
-  trT.appendChild(el('td', 'num', hayVentas ? fmtMoney(ventaRealTotal) : '<span class="muted" style="font-style:italic">pendiente</span>'));
-  trT.appendChild(el('td', 'num rej', fmtMoney(montoTotal)));
-  trT.appendChild(el('td', 'num', docsTotal));
-  trT.appendChild(hayVentas ? pctCell(pctTotal, state.cond.umbral) : el('td', 'muted', '<span style="font-style:italic">pendiente</span>'));
+  trT.appendChild(el('td', 'num', fmtMoney(totals.facturado)));
+  trT.appendChild(el('td', 'num', fmtMoney(totals.ventaReal)));
+  trT.appendChild(el('td', 'num rej', fmtMoney(totals.monto)));
+  trT.appendChild(el('td', 'num', totals.pedidos));
+  trT.appendChild(pctCell(totalPct, state.cond.umbral));
   trT.appendChild(el('td'));
   tfoot.appendChild(trT);
 
-  document.getElementById('vend-note').textContent = `Monto rechazado y Pedidos: reales (Contabilidad NC). Facturado/Venta real: ${hayVentas ? 'reales (Ventas)' : 'pendientes — sin filas de Ventas en este periodo'} · haz clic en un vendedor para ver sus documentos.`;
+  document.getElementById('vend-note').textContent = `Datos reales de Transportistas (${getCorteLabel()}) · estos montos cuadran con Por conductor y Vista general · haz clic en un vendedor para ver sus documentos.`;
 }
 
-function goToVendorDocs(cod) {
-  state.doc.vendor = cod;
+function goToDocs({ chofer, vendedor } = {}) {
+  state.doc.chofer = chofer || 'all';
+  state.doc.vendor = vendedor || 'all';
+  state.doc.page = 0;
   setTab('documentos');
 }
 
@@ -581,17 +586,27 @@ async function renderDocumentos() {
 
 function populateDocFilterOptions(rows) {
   const vendorSel = document.getElementById('docVendor');
+  const choferSel = document.getElementById('docChofer');
   const motivoSel = document.getElementById('docMotivo');
-  const prevVendor = state.doc.vendor, prevMotivo = state.doc.motivo;
+  const prevVendor = state.doc.vendor, prevChofer = state.doc.chofer, prevMotivo = state.doc.motivo;
 
-  const vendors = Array.from(new Set(rows.map(r => r.vendedor).filter(Boolean))).sort();
+  const vendors = Array.from(new Set(rows.map(r => vendedorKey(r)))).sort();
   vendorSel.innerHTML = '';
   vendorSel.appendChild(new Option('Todos', 'all'));
-  vendors.forEach(v => vendorSel.appendChild(new Option(VENDOR_NAMES[v] || ('Vendedor ' + v), v)));
+  vendors.forEach(v => vendorSel.appendChild(new Option(vendedorLabel(v), v)));
   vendorSel.value = vendors.includes(prevVendor) ? prevVendor : 'all';
   state.doc.vendor = vendorSel.value;
 
-  const motivos = Array.from(new Set(rows.map(r => r.motivo).filter(Boolean))).sort();
+  const choferMap = {};
+  rows.forEach(r => { if (r.codcho) choferMap[r.codcho] = r.nomcho || r.codcho; });
+  const choferCods = Object.keys(choferMap).sort((a, b) => choferMap[a].localeCompare(choferMap[b]));
+  choferSel.innerHTML = '';
+  choferSel.appendChild(new Option('Todos', 'all'));
+  choferCods.forEach(c => choferSel.appendChild(new Option(choferMap[c], c)));
+  choferSel.value = choferCods.includes(prevChofer) ? prevChofer : 'all';
+  state.doc.chofer = choferSel.value;
+
+  const motivos = Array.from(new Set(rows.map(r => r.desmot).filter(Boolean))).sort();
   motivoSel.innerHTML = '';
   motivoSel.appendChild(new Option('Todos', 'all'));
   motivos.forEach(m => motivoSel.appendChild(new Option(m, m)));
@@ -604,20 +619,22 @@ function filteredDocRows() {
   const min = state.doc.montoMin === '' ? null : parseFloat(state.doc.montoMin);
   const max = state.doc.montoMax === '' ? null : parseFloat(state.doc.montoMax);
   return DOC_ROWS_CACHE.filter(r => {
-    if (q && !((String(buildDocNumber(r) || '')).toLowerCase().includes(q) || (String(r.razsoc || '')).toLowerCase().includes(q))) return false;
-    if (state.doc.vendor !== 'all' && r.vendedor !== state.doc.vendor) return false;
-    if (state.doc.motivo !== 'all' && r.motivo !== state.doc.motivo) return false;
-    if (min !== null && (Number(r.mondoc) || 0) < min) return false;
-    if (max !== null && (Number(r.mondoc) || 0) > max) return false;
+    if (q && !((String(buildDocNumber(r) || '')).toLowerCase().includes(q) || (String(r.nomcli || '')).toLowerCase().includes(q))) return false;
+    if (state.doc.vendor !== 'all' && vendedorKey(r) !== state.doc.vendor) return false;
+    if (state.doc.chofer !== 'all' && r.codcho !== state.doc.chofer) return false;
+    if (state.doc.motivo !== 'all' && r.desmot !== state.doc.motivo) return false;
+    const monto = transpRechazo(r);
+    if (min !== null && monto < min) return false;
+    if (max !== null && monto > max) return false;
     return true;
   });
 }
 
 function drawDocumentos() {
   const rows = filteredDocRows();
-  const sum = rows.reduce((s, r) => s + (Number(r.mondoc) || 0), 0);
+  const sum = rows.reduce((s, r) => s + transpRechazo(r), 0);
   const avg = rows.length ? sum / rows.length : 0;
-  const clientes = new Set(rows.map(r => r.razsoc)).size;
+  const clientes = new Set(rows.map(r => r.nomcli)).size;
 
   const kpis = document.getElementById('doc-kpis');
   kpis.innerHTML = '';
@@ -626,7 +643,7 @@ function drawDocumentos() {
   kpis.appendChild(kpiCard('teal', 'Promedio por documento', fmtMoney(avg)));
   kpis.appendChild(kpiCard('navy', 'Clientes únicos', clientes));
 
-  document.getElementById('doc-result-label').textContent = `${rows.length} documento(s) encontrado(s) · Contabilidad NC`;
+  document.getElementById('doc-result-label').textContent = `${rows.length} documento(s) encontrado(s) · Transportistas`;
 
   const pageSize = 8;
   const maxPage = Math.max(0, Math.ceil(rows.length / pageSize) - 1);
@@ -635,7 +652,7 @@ function drawDocumentos() {
 
   const table = document.getElementById('doc-table');
   table.querySelector('thead').innerHTML = `<tr>
-    <th>Nota de Crédito</th><th>Doc. Referencia</th><th>Fecha</th><th>Cliente</th>
+    <th>Documento</th><th>Fecha</th><th>Cliente</th><th>Chofer</th>
     <th>Vendedor</th><th style="text-align:right">Monto</th><th>Motivo</th>
   </tr>`;
   const tbody = table.querySelector('tbody');
@@ -643,12 +660,12 @@ function drawDocumentos() {
   pageRows.forEach(r => {
     const tr = el('tr');
     tr.appendChild(el('td', 'mono', buildDocNumber(r) || ''));
-    tr.appendChild(el('td', 'mono', cleanRefDoc(r.referencia) || `<span class="muted">— (${(r.estdoc || 'sin ref.').toLowerCase()})</span>`));
-    tr.appendChild(el('td', 'mono muted', fmtFecha(r.emision)));
-    tr.appendChild(el('td', null, r.razsoc || ''));
-    tr.appendChild(el('td', 'mono muted', VENDOR_NAMES[r.vendedor] || (r.vendedor ? 'Vendedor ' + r.vendedor : '')));
-    tr.appendChild(el('td', 'num rej', fmtMoney(r.mondoc)));
-    tr.appendChild(el('td', 'muted', r.motivo || ''));
+    tr.appendChild(el('td', 'mono muted', fmtFecha(r.fecemi)));
+    tr.appendChild(el('td', null, r.nomcli || ''));
+    tr.appendChild(el('td', 'mono muted', r.nomcho || r.codcho || ''));
+    tr.appendChild(el('td', 'mono muted', vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.codven] || ('Vendedor ' + r.codven))));
+    tr.appendChild(el('td', 'num rej', fmtMoney(transpRechazo(r))));
+    tr.appendChild(el('td', 'muted', r.desmot || ''));
     tbody.appendChild(tr);
   });
 
@@ -659,10 +676,10 @@ function drawDocumentos() {
 
 function exportDocumentosCSV() {
   const rows = filteredDocRows();
-  const header = ['Nota de Credito', 'Doc. Referencia', 'Fecha', 'Cliente', 'Vendedor', 'Monto', 'Motivo'];
+  const header = ['Documento', 'Fecha', 'Cliente', 'Chofer', 'Vendedor', 'Monto', 'Motivo'];
   const lines = [header.map(csvEscape).join(',')];
   rows.forEach(r => {
-    lines.push([buildDocNumber(r), cleanRefDoc(r.referencia) || 'SIN REFERENCIA', toISO(r.emision), r.razsoc, r.vendedor, (Number(r.mondoc) || 0).toFixed(2), r.motivo].map(csvEscape).join(','));
+    lines.push([buildDocNumber(r), toISO(r.fecemi), r.nomcli, r.nomcho || r.codcho, vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.codven] || r.codven), transpRechazo(r).toFixed(2), r.desmot].map(csvEscape).join(','));
   });
   downloadBlob(`documentos_rechazados_${state.doc.from || 'todos'}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
 }
@@ -679,7 +696,7 @@ function setTab(tab) {
 }
 
 function renderAll() {
-  const bannerHayDatos = CORTE_DATA.transportistas.length || CORTE_DATA.ventas.length || CORTE_DATA.nc.length;
+  const bannerHayDatos = CORTE_DATA.transportistas.length || CORTE_DATA.ventas.length;
   const banner = document.getElementById('pendienteBanner');
   document.getElementById('corteLabel').textContent = getCorteLabel();
 
@@ -723,13 +740,14 @@ function wireEvents() {
 
   document.getElementById('docSearch').addEventListener('input', e => { state.doc.search = e.target.value; state.doc.page = 0; drawDocumentos(); });
   document.getElementById('docVendor').addEventListener('change', e => { state.doc.vendor = e.target.value; state.doc.page = 0; drawDocumentos(); });
+  document.getElementById('docChofer').addEventListener('change', e => { state.doc.chofer = e.target.value; state.doc.page = 0; drawDocumentos(); });
   document.getElementById('docMotivo').addEventListener('change', e => { state.doc.motivo = e.target.value; state.doc.page = 0; drawDocumentos(); });
   document.getElementById('docMontoMin').addEventListener('input', e => { state.doc.montoMin = e.target.value; state.doc.page = 0; drawDocumentos(); });
   document.getElementById('docMontoMax').addEventListener('input', e => { state.doc.montoMax = e.target.value; state.doc.page = 0; drawDocumentos(); });
   document.getElementById('docFechaFrom').addEventListener('change', async e => { state.doc.from = e.target.value; await renderDocumentos(); });
   document.getElementById('docFechaTo').addEventListener('change', async e => { state.doc.to = e.target.value; await renderDocumentos(); });
   document.getElementById('docClear').addEventListener('click', async () => {
-    state.doc.search = ''; state.doc.vendor = 'all'; state.doc.motivo = 'all';
+    state.doc.search = ''; state.doc.vendor = 'all'; state.doc.chofer = 'all'; state.doc.motivo = 'all';
     state.doc.montoMin = ''; state.doc.montoMax = ''; state.doc.page = 0;
     document.getElementById('docSearch').value = '';
     document.getElementById('docMontoMin').value = '';
