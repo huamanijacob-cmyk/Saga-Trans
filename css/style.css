@@ -44,10 +44,16 @@ input:focus,button:focus,select:focus{outline:2px solid var(--red);outline-offse
 }
 .login-btn{
   all:unset;cursor:pointer;margin-top:20px;height:46px;border-radius:10px;background:var(--navy);
-  color:#FFFFFF;text-align:center;font-size:14px;font-weight:600;
+  color:#FFFFFF;text-align:center;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;
 }
 .login-btn:hover{background:#0F2547;}
-.login-error{min-height:18px;margin-top:10px;font-size:12px;color:var(--red);}
+.login-btn:disabled{opacity:.7;cursor:default;}
+.login-error{min-height:18px;margin-top:10px;font-size:12px;color:var(--red);display:none;}
+.spinner{
+  width:13px;height:13px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
+  border-radius:50%;animation:spin .7s linear infinite;display:none;
+}
+@keyframes spin{ to{ transform:rotate(360deg); } }
 
 .logout-btn{
   all:unset;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
