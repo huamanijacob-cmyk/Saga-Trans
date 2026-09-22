@@ -206,7 +206,7 @@ th{
   color:var(--muted);border-bottom:1px solid var(--card-border);
 }
 td{padding:14px 18px;font-size:14px;color:var(--ink);border-bottom:1px solid var(--row-border);}
-.num{font-family:'IBM Plex Mono',monospace;font-size:13px;text-align:right;}
+.num{font-family:'IBM Plex Mono',monospace;font-size:13px;text-align:right;white-space:nowrap;}
 .mono{font-family:'IBM Plex Mono',monospace;}
 .rej{color:var(--red);}
 .muted{color:var(--muted);}
