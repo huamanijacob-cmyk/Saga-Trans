@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js versión 2 (con login endurecido)');
+console.log('Panel de Rechazos — app.js versión 3 (fix: colisión de nombre "supabase")');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -25,7 +25,7 @@ const memoryAuthStorage = (() => {
   };
 })();
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { storage: memoryAuthStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
 });
 
@@ -133,7 +133,7 @@ async function loadModuleFile(folder, prefix, periodo) {
   const path = `${folder}/${prefix}_${periodo}.xlsx`;
   if (FILE_CACHE[path]) return FILE_CACHE[path];
 
-  const { data, error } = await supabase.storage.from(STORAGE_BUCKET).download(path);
+  const { data, error } = await supabaseClient.storage.from(STORAGE_BUCKET).download(path);
   if (error) {
     // Es normal no tener todavía el archivo de un mes (p.ej. futuro o no subido aún).
     console.warn(`No se encontró "${path}" en el bucket "${STORAGE_BUCKET}":`, error.message);
@@ -728,7 +728,7 @@ function resetInactivityTimer() {
   if (inactivityTimer) clearTimeout(inactivityTimer);
   inactivityTimer = setTimeout(async () => {
     logoutReason = `Tu sesión se cerró por inactividad (${INACTIVITY_LIMIT_MS / 60000} minutos sin uso).`;
-    await supabase.auth.signOut();
+    await supabaseClient.auth.signOut();
   }, INACTIVITY_LIMIT_MS);
 }
 function stopInactivityTimer() {
@@ -777,14 +777,14 @@ function showLogin() {
 // Revisa si ya había sesión al cargar (no aplica aquí, porque la sesión vive
 // solo en memoria y se pierde al recargar — pero se deja por si en el futuro
 // se cambia a sessionStorage) y reacciona a cualquier cambio después.
-supabase.auth.getSession().then(({ data: { session } }) => {
+supabaseClient.auth.getSession().then(({ data: { session } }) => {
   if (session) { showApp(); } else { showLogin(); }
 }).catch(err => {
   console.error('Error revisando sesión existente:', err);
   showLogin();
 });
 
-supabase.auth.onAuthStateChange((event, session) => {
+supabaseClient.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_IN' && session) showApp();
   if (event === 'SIGNED_OUT') showLogin();
 });
@@ -800,7 +800,7 @@ loginForm.addEventListener('submit', async (e) => {
   const password = document.getElementById('loginPassword').value;
 
   try {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
       console.error('Error de login de Supabase:', error);
       loginError.textContent = error.message.includes('Invalid login credentials')
@@ -822,7 +822,7 @@ loginForm.addEventListener('submit', async (e) => {
 
 logoutBtn.addEventListener('click', async () => {
   try {
-    await supabase.auth.signOut();
+    await supabaseClient.auth.signOut();
   } catch (err) {
     console.error('Error al cerrar sesión:', err);
   }
