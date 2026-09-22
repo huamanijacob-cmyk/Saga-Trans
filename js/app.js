@@ -4,7 +4,30 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+console.log('Panel de Rechazos — app.js versión 2 (con login endurecido)');
+
+// Bloquea el bfcache: si el navegador restaura una foto congelada de la
+// página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
+// en vez de mostrar el panel tal como estaba en el momento de salir.
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) location.reload();
+});
+
+// Sesión SOLO en memoria (nada en localStorage/sessionStorage): al recargar
+// la página, o si alguien cierra la pestaña, hay que loguearse de nuevo.
+// Elegido así porque este panel muestra montos, clientes y vendedores reales.
+const memoryAuthStorage = (() => {
+  const store = new Map();
+  return {
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => { store.set(key, value); },
+    removeItem: (key) => { store.delete(key); },
+  };
+})();
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { storage: memoryAuthStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+});
 
 const MES_ABBR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
 
@@ -685,55 +708,122 @@ async function bootApp() {
   renderAll();
 }
 
-function showApp() {
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('appRoot').style.display = '';
+const loginScreen = document.getElementById('loginScreen');
+const appRoot = document.getElementById('appRoot');
+const loginForm = document.getElementById('loginForm');
+const loginError = document.getElementById('loginError');
+const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+const loginSpinner = document.getElementById('loginSpinner');
+const loginBtnText = document.getElementById('loginBtnText');
+const logoutBtn = document.getElementById('logoutBtn');
+
+// Cierre de sesión automático por inactividad (30 min — ajusta si quieres).
+const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
+let inactivityTimer = null;
+let sessionActive = false;
+let logoutReason = null;
+
+function resetInactivityTimer() {
+  if (!sessionActive) return;
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(async () => {
+    logoutReason = `Tu sesión se cerró por inactividad (${INACTIVITY_LIMIT_MS / 60000} minutos sin uso).`;
+    await supabase.auth.signOut();
+  }, INACTIVITY_LIMIT_MS);
 }
-function showLogin(message) {
-  document.getElementById('appRoot').style.display = 'none';
-  document.getElementById('loginScreen').style.display = 'flex';
-  document.getElementById('loginError').textContent = message || '';
+function stopInactivityTimer() {
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  inactivityTimer = null;
 }
+['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach(evt => {
+  document.addEventListener(evt, resetInactivityTimer, { passive: true });
+});
 
 let appBooted = false;
 
-function wireAuth() {
-  document.getElementById('loginForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('loginEmail').value.trim();
-    const password = document.getElementById('loginPassword').value;
-    const btn = e.target.querySelector('.login-btn');
-    btn.textContent = 'Ingresando...';
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    btn.textContent = 'Ingresar';
-    if (error) {
-      document.getElementById('loginError').textContent = 'Correo o contraseña incorrectos.';
-    }
-    // El cambio de sesión lo maneja onAuthStateChange más abajo.
-  });
+async function showApp() {
+  loginScreen.style.display = 'none';
+  appRoot.style.display = '';
+  sessionActive = true;
+  resetInactivityTimer();
 
-  document.getElementById('logoutBtn').addEventListener('click', async () => {
-    await supabase.auth.signOut();
-  });
-
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    if (session) {
-      showApp();
-      if (!appBooted) {
-        appBooted = true;
-        await bootApp().catch(err => {
-          console.error(err);
-          document.querySelector('.wrap').innerHTML =
-            `<div class="empty-state"><div class="empty-title">No se pudo cargar el panel</div><div class="empty-text">${err.message}</div></div>`;
-        });
-      }
-    } else {
-      showLogin();
+  if (!appBooted) {
+    appBooted = true;
+    try {
+      if (typeof XLSX === 'undefined') throw new Error('SheetJS (XLSX) no cargó — revisa el <script> de xlsx en index.html.');
+      await bootApp();
+    } catch (err) {
+      console.error(err);
+      document.querySelector('.wrap').innerHTML =
+        `<div class="empty-state"><div class="empty-title">No se pudo cargar el panel</div><div class="empty-text">${err.message}</div></div>`;
     }
-  });
+  }
+}
+function showLogin() {
+  appRoot.style.display = 'none';
+  loginScreen.style.display = 'flex';
+  loginForm.reset();
+  sessionActive = false;
+  stopInactivityTimer();
+  if (logoutReason) {
+    loginError.textContent = logoutReason;
+    loginError.style.display = 'block';
+    logoutReason = null;
+  } else {
+    loginError.style.display = 'none';
+  }
 }
 
-wireAuth();
+// Revisa si ya había sesión al cargar (no aplica aquí, porque la sesión vive
+// solo en memoria y se pierde al recargar — pero se deja por si en el futuro
+// se cambia a sessionStorage) y reacciona a cualquier cambio después.
 supabase.auth.getSession().then(({ data: { session } }) => {
   if (session) { showApp(); } else { showLogin(); }
+}).catch(err => {
+  console.error('Error revisando sesión existente:', err);
+  showLogin();
+});
+
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && session) showApp();
+  if (event === 'SIGNED_OUT') showLogin();
+});
+
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  loginError.style.display = 'none';
+  loginSubmitBtn.disabled = true;
+  loginSpinner.style.display = 'inline-block';
+  loginBtnText.textContent = 'Ingresando...';
+
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+
+  try {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      console.error('Error de login de Supabase:', error);
+      loginError.textContent = error.message.includes('Invalid login credentials')
+        ? 'Correo o contraseña incorrectos.'
+        : 'No se pudo iniciar sesión: ' + error.message;
+      loginError.style.display = 'block';
+    }
+    // Si no hay error, onAuthStateChange se encarga de mostrar la app.
+  } catch (err) {
+    console.error('Excepción inesperada al iniciar sesión:', err);
+    loginError.textContent = 'Error de conexión al intentar iniciar sesión: ' + err.message;
+    loginError.style.display = 'block';
+  } finally {
+    loginSubmitBtn.disabled = false;
+    loginSpinner.style.display = 'none';
+    loginBtnText.textContent = 'Ingresar';
+  }
+});
+
+logoutBtn.addEventListener('click', async () => {
+  try {
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.error('Error al cerrar sesión:', err);
+  }
 });
