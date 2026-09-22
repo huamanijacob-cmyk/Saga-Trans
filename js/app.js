@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 15 (fix: filtro Sin identificar en Documentos)');
+console.log('Panel de Rechazos — app.js version 16 (fix: cruce NC invertido - doc propio de NC, no su referencia)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -254,21 +254,32 @@ function buildDocToChoferMap(transportistas) {
   });
   return map;
 }
-function buildNcRefToDocMap(nc) {
+function buildNcDocToRefMap(nc) {
+  // Para las líneas 'D' de Ventas, su propio "documento" (tipo+serie+doc)
+  // YA ES el número de la nota de crédito, no el de la venta original.
+  // Este mapa va: documento propio de la NC -> su "referencia" (el
+  // documento original que sustenta), que es lo que sí puede coincidir
+  // con un Documento de Transportistas.
   const map = {};
   nc.forEach(r => {
-    const ref = cleanRefDoc(r.referencia);
     const ncDoc = buildDocNumber(r);
-    if (ref && ncDoc) map[ref] = ncDoc;
+    const ref = cleanRefDoc(r.referencia);
+    if (ncDoc && ref) map[ncDoc] = ref;
   });
   return map;
 }
-function resolveChofer(ventaRow, docToChofer, ncRefToDoc) {
+function resolveChofer(ventaRow, docToChofer, ncDocToRef) {
   const own = ventasDocNumber(ventaRow);
-  let hit = own ? docToChofer[own] : null;
-  if (!hit && own) {
-    const ncDoc = ncRefToDoc[own];
-    if (ncDoc) hit = docToChofer[ncDoc];
+  if (!own) return null;
+  // Intento 1: el documento de la venta coincide directo con Transportistas
+  // (así funciona para las líneas normales de venta).
+  let hit = docToChofer[own];
+  if (!hit) {
+    // Intento 2: el documento de la venta es en realidad una nota de
+    // crédito — se busca su referencia (documento original) y con esa se
+    // busca el chofer.
+    const ref = ncDocToRef[own];
+    if (ref) hit = docToChofer[ref];
   }
   return hit || null;
 }
@@ -299,13 +310,13 @@ async function buildJoinMaps(uptoPeriodo) {
   const allNc = files.flatMap(f => f[1]);
   return {
     docToChofer: buildDocToChoferMap(allTransportistas),
-    ncRefToDoc: buildNcRefToDocMap(allNc),
+    ncDocToRef: buildNcDocToRefMap(allNc),
   };
 }
 
 async function loadCorteData() {
   const periodo = state.modo === 'dia' ? state.diaSel.slice(0, 7) : state.mesSel;
-  const [v, { docToChofer, ncRefToDoc }] = await Promise.all([
+  const [v, { docToChofer, ncDocToRef }] = await Promise.all([
     loadModuleFile('Ventas', 'Ventas', periodo),
     buildJoinMaps(periodo),
   ]);
@@ -316,7 +327,7 @@ async function loadCorteData() {
     ventas = ventas.filter(r => toISO(r.fecha) === d);
   }
   // Resuelve y guarda el chofer de cada línea de venta una sola vez.
-  ventas.forEach(r => { r._chofer = resolveChofer(r, docToChofer, ncRefToDoc); });
+  ventas.forEach(r => { r._chofer = resolveChofer(r, docToChofer, ncDocToRef); });
 
   CORTE_DATA = { ventas };
 
@@ -327,10 +338,10 @@ async function loadDocumentosData() {
   // "Documentos rechazados" = líneas de Ventas con vtadvo = 'D' (devolución).
   if (!state.doc.from || !state.doc.to) return [];
   const periodos = monthsBetween(state.doc.from, state.doc.to);
-  const { docToChofer, ncRefToDoc } = await buildJoinMaps(state.doc.to.slice(0, 7));
+  const { docToChofer, ncDocToRef } = await buildJoinMaps(state.doc.to.slice(0, 7));
   const results = await Promise.all(periodos.map(async p => {
     const v = await loadModuleFile('Ventas', 'Ventas', p);
-    v.forEach(r => { r._chofer = resolveChofer(r, docToChofer, ncRefToDoc); });
+    v.forEach(r => { r._chofer = resolveChofer(r, docToChofer, ncDocToRef); });
     return v;
   }));
   const all = results.flat();
