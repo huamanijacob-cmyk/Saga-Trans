@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 16 (fix: cruce NC invertido - doc propio de NC, no su referencia)');
+console.log('Panel de Rechazos — app.js version 19 (fix: montos vuelven a positivo en rojo)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -250,7 +250,7 @@ function buildDocToChoferMap(transportistas) {
   const map = {};
   transportistas.forEach(r => {
     const doc = buildDocNumber(r);
-    if (doc) map[doc] = { codcho: r.codcho || null, nomcho: r.nomcho || r.codcho || null, desmot: r.desmot || null };
+    if (doc) map[doc] = { codcho: r.codcho || null, nomcho: r.nomcho || r.codcho || null, desmot: r.desmot || null, pde: r.nrodsp || null };
   });
   return map;
 }
@@ -323,8 +323,8 @@ async function loadCorteData() {
 
   let ventas = v;
   if (state.modo === 'dia') {
-    const d = state.diaSel;
-    ventas = ventas.filter(r => toISO(r.fecha) === d);
+    const { from, to } = getCorteRange();
+    ventas = ventas.filter(r => { const iso = toISO(r.fecha); return iso && iso >= from && iso <= to; });
   }
   // Resuelve y guarda el chofer de cada línea de venta una sola vez.
   ventas.forEach(r => { r._chofer = resolveChofer(r, docToChofer, ncDocToRef); });
@@ -635,9 +635,109 @@ function renderVendedor() {
   document.getElementById('vend-note').textContent = `Datos reales de Ventas (${getCorteLabel()}) · estos montos cuadran con Por conductor y Vista general · haz clic en un vendedor para ver sus documentos.`;
 }
 
-function goToDocs({ chofer, vendedor } = {}) {
+/* ---------------- Rechazos por motivo / reparto ---------------- */
+
+function renderMotivo() {
+  document.querySelectorAll('.corteLabelInline').forEach(e => e.textContent = getCorteLabel());
+
+  const rows = [];
+  CORTE_DATA.ventas.forEach(r => {
+    if (r.vtadvo !== 'D') return;
+    const monto = Number(r.soles) || 0; // ya viene negativo
+    const hit = r._chofer;
+    rows.push({
+      chofer: hit && hit.codcho ? (hit.nomcho || hit.codcho) : 'Venta Oficina',
+      motivo: (hit && hit.desmot) || 'Sin motivo',
+      monto,
+    });
+  });
+
+  const kpis = document.getElementById('motivo-kpis');
+  kpis.innerHTML = '';
+  kpis.appendChild(kpiCard('navy', 'Líneas rechazadas', rows.length));
+  kpis.appendChild(kpiCard('teal', 'Motivos distintos', new Set(rows.map(r => r.motivo)).size));
+  kpis.appendChild(kpiCard('red', 'Monto total', fmtMoneyNeg(rows.reduce((s, r) => s + r.monto, 0))));
+
+  const motivos = Array.from(new Set(rows.map(r => r.motivo))).sort();
+  const choferes = Array.from(new Set(rows.map(r => r.chofer))).sort((a, b) => {
+    if (a === 'Venta Oficina') return 1;
+    if (b === 'Venta Oficina') return -1;
+    return a.localeCompare(b);
+  });
+
+  const matrix = {};
+  choferes.forEach(c => matrix[c] = {});
+  rows.forEach(r => { matrix[r.chofer][r.motivo] = (matrix[r.chofer][r.motivo] || 0) + r.monto; });
+
+  const table = document.getElementById('motivo-table');
+  const thead = table.querySelector('thead'), tbody = table.querySelector('tbody'), tfoot = table.querySelector('tfoot');
+  thead.innerHTML = ''; tbody.innerHTML = ''; tfoot.innerHTML = '';
+
+  if (!choferes.length) {
+    document.getElementById('motivo-note').textContent = 'No hay líneas rechazadas en este periodo.';
+    return;
+  }
+
+  const trHead = el('tr'); trHead.style.background = '#F5F3ED';
+  trHead.appendChild(el('th', null, 'Chofer'));
+  motivos.forEach(m => {
+    const th = el('th', null, m.toUpperCase());
+    th.style.textAlign = 'center';
+    trHead.appendChild(th);
+  });
+  const thTotal = el('th', null, 'Total');
+  thTotal.style.textAlign = 'center';
+  trHead.appendChild(thTotal);
+  thead.appendChild(trHead);
+
+  const colTotals = motivos.map(() => 0);
+  let grandTotal = 0;
+  choferes.forEach(ch => {
+    const tr = el('tr');
+    tr.appendChild(el('td', null, ch.toUpperCase()));
+    let rowTotal = 0;
+    motivos.forEach((m, i) => {
+      const val = matrix[ch][m];
+      const td = el('td', 'num rej', val ? fmtMoneyNeg(val) : '');
+      td.style.textAlign = 'center';
+      if (val) {
+        td.classList.add('clickable');
+        td.title = 'Ver documentos rechazados';
+        td.addEventListener('click', () => goToDocs({ chofer: ch === 'Venta Oficina' ? 'SIN_CHOFER' : findChoferCod(ch), motivo: m === 'Sin motivo' ? null : m }));
+      }
+      tr.appendChild(td);
+      if (val) { rowTotal += val; colTotals[i] += val; }
+    });
+    grandTotal += rowTotal;
+    tr.appendChild(el('td', 'num rej', fmtMoneyNeg(rowTotal)));
+    tbody.appendChild(tr);
+  });
+
+  const trFoot = el('tr');
+  trFoot.appendChild(el('td', null, 'Total'));
+  colTotals.forEach(t => {
+    const td = el('td', 'num rej', fmtMoneyNeg(t));
+    td.style.textAlign = 'center';
+    trFoot.appendChild(td);
+  });
+  trFoot.appendChild(el('td', 'num rej', fmtMoneyNeg(grandTotal)));
+  tfoot.appendChild(trFoot);
+
+  document.getElementById('motivo-note').textContent =
+    'Datos reales de Ventas (líneas de devolución), agrupadas por chofer y motivo de rechazo · "Venta Oficina" son las líneas sin chofer identificado · haz clic en una celda para ver esos documentos.';
+}
+
+function findChoferCod(nombre) {
+  for (const r of CORTE_DATA.ventas) {
+    if (r._chofer && r._chofer.codcho && (r._chofer.nomcho || r._chofer.codcho) === nombre) return r._chofer.codcho;
+  }
+  return 'all';
+}
+
+function goToDocs({ chofer, vendedor, motivo } = {}) {
   state.doc.chofer = chofer || 'all';
   state.doc.vendor = vendedor || 'all';
+  state.doc.motivo = motivo || 'all';
   state.doc.page = 0;
   setTab('documentos');
 }
@@ -694,7 +794,7 @@ function filteredDocRows() {
   const max = state.doc.montoMax === '' ? null : parseFloat(state.doc.montoMax);
   return DOC_ROWS_CACHE.filter(r => {
     const choferCod = r._chofer ? r._chofer.codcho : null;
-    if (q && !((String(ventasDocNumber(r) || '')).toLowerCase().includes(q) || (String(r.nombrecliente || '')).toLowerCase().includes(q))) return false;
+    if (q && !((String(ventasDocNumber(r) || '')).toLowerCase().includes(q) || (String((r._chofer && r._chofer.pde) || '')).toLowerCase().includes(q) || (String(codCliente(r) || '')).toLowerCase().includes(q) || (String(r.nombrecliente || '')).toLowerCase().includes(q))) return false;
     if (state.doc.vendor !== 'all' && vendedorKey(r) !== state.doc.vendor) return false;
     if (state.doc.chofer === 'SIN_CHOFER') { if (choferCod) return false; }
     else if (state.doc.chofer !== 'all' && choferCod !== state.doc.chofer) return false;
@@ -706,17 +806,27 @@ function filteredDocRows() {
   });
 }
 
+function fmtMoneyNeg(n) {
+  // El monto viene negativo en el Excel (líneas de devolución), pero se
+  // muestra en positivo (en rojo vía la clase "rej") — igual que en el
+  // resto del panel, así no hay que leer signos.
+  return fmtMoney(-(Number(n) || 0));
+}
+function codCliente(r) {
+  return `${r.codclte || ''}${r.domic || ''}` || '';
+}
+
 function drawDocumentos() {
   const rows = filteredDocRows();
-  const sum = rows.reduce((s, r) => s + (-(Number(r.soles) || 0)), 0);
+  const sum = rows.reduce((s, r) => s + (Number(r.soles) || 0), 0);
   const avg = rows.length ? sum / rows.length : 0;
   const clientes = new Set(rows.map(r => r.nombrecliente)).size;
 
   const kpis = document.getElementById('doc-kpis');
   kpis.innerHTML = '';
   kpis.appendChild(kpiCard('navy', 'Documentos (filtro)', rows.length));
-  kpis.appendChild(kpiCard('red', 'Suma total', fmtMoney(sum)));
-  kpis.appendChild(kpiCard('teal', 'Promedio por documento', fmtMoney(avg)));
+  kpis.appendChild(kpiCard('red', 'Suma total', fmtMoneyNeg(sum)));
+  kpis.appendChild(kpiCard('teal', 'Promedio por documento', fmtMoneyNeg(avg)));
   kpis.appendChild(kpiCard('navy', 'Clientes únicos', clientes));
 
   document.getElementById('doc-result-label').textContent = `${rows.length} documento(s) encontrado(s) · Ventas (devoluciones)`;
@@ -728,21 +838,22 @@ function drawDocumentos() {
 
   const table = document.getElementById('doc-table');
   table.querySelector('thead').innerHTML = `<tr>
-    <th>Documento</th><th>Fecha</th><th>Cliente</th><th>Chofer</th>
-    <th>Vendedor</th><th style="text-align:right">Monto</th><th>Motivo</th>
+    <th>Fecha</th><th>PDE</th><th>Código</th><th>Cliente</th>
+    <th>Vendedor</th><th>Chofer</th><th>Motivo</th><th style="text-align:right">Monto</th>
   </tr>`;
   const tbody = table.querySelector('tbody');
   tbody.innerHTML = '';
   pageRows.forEach(r => {
     const chofer = r._chofer ? (r._chofer.nomcho || r._chofer.codcho) : null;
     const tr = el('tr');
-    tr.appendChild(el('td', 'mono', ventasDocNumber(r) || ''));
     tr.appendChild(el('td', 'mono muted', fmtFecha(r.fecha)));
+    tr.appendChild(el('td', 'mono', (r._chofer && r._chofer.pde) || ''));
+    tr.appendChild(el('td', 'mono muted', codCliente(r)));
     tr.appendChild(el('td', null, r.nombrecliente || ''));
-    tr.appendChild(el('td', 'mono muted', chofer || '<span class="muted" style="font-style:italic">sin identificar</span>'));
     tr.appendChild(el('td', 'mono muted', vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.vendedor] || r.nombrevendedor || ('Vendedor ' + r.vendedor))));
-    tr.appendChild(el('td', 'num rej', fmtMoney(-(Number(r.soles) || 0))));
+    tr.appendChild(el('td', 'mono muted', chofer || '<span class="muted" style="font-style:italic">sin identificar</span>'));
     tr.appendChild(el('td', 'muted', (r._chofer && r._chofer.desmot) || ''));
+    tr.appendChild(el('td', 'num rej', fmtMoneyNeg(Number(r.soles) || 0)));
     tbody.appendChild(tr);
   });
 
@@ -753,11 +864,11 @@ function drawDocumentos() {
 
 function exportDocumentosCSV() {
   const rows = filteredDocRows();
-  const header = ['Documento', 'Fecha', 'Cliente', 'Chofer', 'Vendedor', 'Monto', 'Motivo'];
+  const header = ['Fecha', 'PDE', 'Codigo', 'Cliente', 'Vendedor', 'Chofer', 'Motivo', 'Monto'];
   const lines = [header.map(csvEscape).join(',')];
   rows.forEach(r => {
     const chofer = r._chofer ? (r._chofer.nomcho || r._chofer.codcho) : '';
-    lines.push([ventasDocNumber(r), toISO(r.fecha), r.nombrecliente, chofer, vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.vendedor] || r.vendedor), (-(Number(r.soles) || 0)).toFixed(2), (r._chofer && r._chofer.desmot) || ''].map(csvEscape).join(','));
+    lines.push([toISO(r.fecha), (r._chofer && r._chofer.pde) || '', codCliente(r), r.nombrecliente, vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.vendedor] || r.vendedor), chofer, (r._chofer && r._chofer.desmot) || '', (-(Number(r.soles) || 0)).toFixed(2)].map(csvEscape).join(','));
   });
   downloadBlob(`documentos_rechazados_${state.doc.from || 'todos'}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
 }
@@ -767,7 +878,7 @@ function exportDocumentosCSV() {
 function setTab(tab) {
   state.tab = tab;
   document.querySelectorAll('.tabbar .tab-btn').forEach(b => b.classList.toggle('tab-active', b.dataset.tab === tab));
-  ['general', 'conductor', 'vendedor', 'documentos'].forEach(t => {
+  ['general', 'conductor', 'vendedor', 'motivo', 'documentos'].forEach(t => {
     document.getElementById('panel-' + t).style.display = (t === tab) ? '' : 'none';
   });
   renderAll();
@@ -778,7 +889,7 @@ function renderAll() {
   const banner = document.getElementById('pendienteBanner');
   document.getElementById('corteLabel').textContent = getCorteLabel();
 
-  if (state.tab !== 'documentos' && !bannerHayDatos) {
+  if (state.tab !== 'documentos' && state.tab !== 'motivo' && !bannerHayDatos) {
     banner.style.display = 'flex';
     banner.textContent = `Todavía no hay datos cargados para ${getCorteLabel()}. Sube los 3 Excel de ese mes a Storage y este panel se completa solo.`;
   } else {
@@ -788,6 +899,7 @@ function renderAll() {
   if (state.tab === 'general') renderGeneral();
   else if (state.tab === 'conductor') renderConductor();
   else if (state.tab === 'vendedor') renderVendedor();
+  else if (state.tab === 'motivo') renderMotivo();
   else if (state.tab === 'documentos') drawDocumentos();
 }
 
