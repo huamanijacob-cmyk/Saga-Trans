@@ -253,6 +253,15 @@ th button:hover{color:var(--red);}
   body *{visibility:hidden;}
   .print-target,.print-target *{visibility:visible;}
   .print-target{position:absolute;left:0;top:0;width:100%;}
+  .table-scroll{overflow:visible !important;}
+  table{width:100% !important;min-width:0 !important;table-layout:auto;}
+  th,td{font-size:11px !important;padding:6px 8px !important;white-space:nowrap;}
+  .kpi{box-shadow:none !important;}
+  .card{box-shadow:none !important;}
+}
+@page{
+  size:landscape;
+  margin:12mm;
 }
 
 /* ---------- Responsive ---------- */
