@@ -255,13 +255,17 @@ th button:hover{color:var(--red);}
   .print-target{position:absolute;left:0;top:0;width:100%;}
   .table-scroll{overflow:visible !important;}
   table{width:100% !important;min-width:0 !important;table-layout:auto;}
-  th,td{font-size:11px !important;padding:6px 8px !important;white-space:nowrap;}
+  th,td{font-size:10px !important;padding:5px 7px !important;white-space:nowrap;}
   .kpi{box-shadow:none !important;}
   .card{box-shadow:none !important;}
+  .print-title{display:block !important;margin-bottom:14px;}
 }
+.print-title{display:none;}
+.print-title-main{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:var(--ink);}
+.print-title-sub{font-size:11px;color:var(--muted);margin-top:2px;}
 @page{
   size:landscape;
-  margin:12mm;
+  margin:10mm;
 }
 
 /* ---------- Responsive ---------- */
