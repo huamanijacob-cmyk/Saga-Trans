@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 19 (fix: montos vuelven a positivo en rojo)');
+console.log('Panel de Rechazos — app.js version 21 (las 4 vistas tienen PDF y Excel por igual)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -354,6 +354,42 @@ async function loadDocumentosData() {
 
 /* ---------------- Vista general (cruce Chofer x Vendedor) ---------------- */
 
+function exportGeneralCSV() {
+  const cross = [];
+  CORTE_DATA.ventas.forEach(r => {
+    if (r.vtadvo !== 'D') return;
+    const monto = -(Number(r.soles) || 0);
+    if (monto <= 0.01) return;
+    const hit = r._chofer;
+    cross.push({
+      choferCod: hit && hit.codcho ? hit.codcho : 'SIN_CHOFER',
+      chofer: hit && hit.codcho ? (hit.nomcho || hit.codcho) : 'Sin identificar',
+      vendCod: vendedorKey(r),
+      monto,
+    });
+  });
+  const vendCols = Array.from(new Set(cross.map(c => c.vendCod))).sort();
+  const choferNombre = {};
+  cross.forEach(c => { choferNombre[c.choferCod] = c.chofer; });
+  const choferCods = Array.from(new Set(cross.map(c => c.choferCod))).sort((a, b) => (choferNombre[a] || '').localeCompare(choferNombre[b] || ''));
+  const matrix = {};
+  choferCods.forEach(c => matrix[c] = {});
+  cross.forEach(c => { matrix[c.choferCod][c.vendCod] = (matrix[c.choferCod][c.vendCod] || 0) + c.monto; });
+
+  const header = ['Chofer'].concat(vendCols.map(vendedorLabel)).concat(['Total']);
+  const lines = [header.map(csvEscape).join(',')];
+  const colTotals = vendCols.map(() => 0);
+  let grandTotal = 0;
+  choferCods.forEach(ch => {
+    let rowTotal = 0;
+    const vals = vendCols.map((v, i) => { const val = matrix[ch][v] || 0; rowTotal += val; colTotals[i] += val; return val.toFixed(2); });
+    grandTotal += rowTotal;
+    lines.push([choferNombre[ch]].concat(vals).concat([rowTotal.toFixed(2)]).map(csvEscape).join(','));
+  });
+  lines.push(['Total general'].concat(colTotals.map(t => t.toFixed(2))).concat([grandTotal.toFixed(2)]).map(csvEscape).join(','));
+  downloadBlob(`vista_general_${getCorteRange().to}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
+}
+
 function renderGeneral() {
   document.querySelectorAll('.corteLabelInline').forEach(e => e.textContent = getCorteLabel());
 
@@ -455,6 +491,19 @@ function renderGeneral() {
 }
 
 /* ---------------- Por conductor ---------------- */
+
+function exportConductorCSV() {
+  const rows = aggregateConductor();
+  const totals = rows.reduce((a, r) => ({ facturado: a.facturado + r.facturado, ventaReal: a.ventaReal + r.ventaReal, monto: a.monto + r.monto, pedidos: a.pedidos + r.pedidos }), { facturado: 0, ventaReal: 0, monto: 0, pedidos: 0 });
+  const totalPct = totals.facturado ? totals.monto / totals.facturado : 0;
+  const header = ['Conductor', 'Codigo', 'Facturado', 'Venta real', 'Monto rechazado', 'Pedidos', '% Rechazo'];
+  const lines = [header.map(csvEscape).join(',')];
+  rows.sort((a, b) => b.monto - a.monto).forEach(r => {
+    lines.push([r.nombre, r.cod, r.facturado.toFixed(2), r.ventaReal.toFixed(2), r.monto.toFixed(2), r.pedidos, (r.pct * 100).toFixed(2) + '%'].map(csvEscape).join(','));
+  });
+  lines.push(['Total general', '', totals.facturado.toFixed(2), totals.ventaReal.toFixed(2), totals.monto.toFixed(2), totals.pedidos, (totalPct * 100).toFixed(2) + '%'].map(csvEscape).join(','));
+  downloadBlob(`por_conductor_${getCorteRange().to}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
+}
 
 function aggregateConductor() {
   const map = {};
@@ -561,9 +610,7 @@ function pctCell(pct, umbral) {
 
 /* ---------------- Por vendedor ---------------- */
 
-function renderVendedor() {
-  document.querySelectorAll('.corteLabelInline').forEach(e => e.textContent = getCorteLabel());
-
+function aggregateVendedor() {
   const map = {};
   CORTE_DATA.ventas.forEach(r => {
     const key = vendedorKey(r);
@@ -576,7 +623,26 @@ function renderVendedor() {
       map[key].pedidos += 1;
     }
   });
-  const all = Object.values(map).map(r => ({ ...r, ventaReal: r.facturado - r.monto, pct: r.facturado ? r.monto / r.facturado : 0 }));
+  return Object.values(map).map(r => ({ ...r, ventaReal: r.facturado - r.monto, pct: r.facturado ? r.monto / r.facturado : 0 }));
+}
+
+function exportVendedorCSV() {
+  const rows = aggregateVendedor();
+  const totals = rows.reduce((a, r) => ({ facturado: a.facturado + r.facturado, ventaReal: a.ventaReal + r.ventaReal, monto: a.monto + r.monto, pedidos: a.pedidos + r.pedidos }), { facturado: 0, ventaReal: 0, monto: 0, pedidos: 0 });
+  const totalPct = totals.facturado ? totals.monto / totals.facturado : 0;
+  const header = ['Vendedor', 'Codigo', 'Facturado', 'Venta real', 'Monto rechazado', 'Pedidos', '% Rechazo'];
+  const lines = [header.map(csvEscape).join(',')];
+  rows.sort((a, b) => b.monto - a.monto).forEach(r => {
+    lines.push([vendedorLabel(r.cod), r.cod, r.facturado.toFixed(2), r.ventaReal.toFixed(2), r.monto.toFixed(2), r.pedidos, (r.pct * 100).toFixed(2) + '%'].map(csvEscape).join(','));
+  });
+  lines.push(['Total general', '', totals.facturado.toFixed(2), totals.ventaReal.toFixed(2), totals.monto.toFixed(2), totals.pedidos, (totalPct * 100).toFixed(2) + '%'].map(csvEscape).join(','));
+  downloadBlob(`por_vendedor_${getCorteRange().to}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
+}
+
+function renderVendedor() {
+  document.querySelectorAll('.corteLabelInline').forEach(e => e.textContent = getCorteLabel());
+
+  const all = aggregateVendedor();
 
   const totals = all.reduce((a, r) => ({ facturado: a.facturado + r.facturado, ventaReal: a.ventaReal + r.ventaReal, monto: a.monto + r.monto, pedidos: a.pedidos + r.pedidos }), { facturado: 0, ventaReal: 0, monto: 0, pedidos: 0 });
   const totalPct = totals.facturado ? totals.monto / totals.facturado : 0;
@@ -636,6 +702,42 @@ function renderVendedor() {
 }
 
 /* ---------------- Rechazos por motivo / reparto ---------------- */
+
+function exportMotivoCSV() {
+  const rows = [];
+  CORTE_DATA.ventas.forEach(r => {
+    if (r.vtadvo !== 'D') return;
+    const monto = -(Number(r.soles) || 0);
+    const hit = r._chofer;
+    rows.push({
+      chofer: hit && hit.codcho ? (hit.nomcho || hit.codcho) : 'Venta Oficina',
+      motivo: (hit && hit.desmot) || 'Sin motivo',
+      monto,
+    });
+  });
+  const motivos = Array.from(new Set(rows.map(r => r.motivo))).sort();
+  const choferes = Array.from(new Set(rows.map(r => r.chofer))).sort((a, b) => {
+    if (a === 'Venta Oficina') return 1;
+    if (b === 'Venta Oficina') return -1;
+    return a.localeCompare(b);
+  });
+  const matrix = {};
+  choferes.forEach(c => matrix[c] = {});
+  rows.forEach(r => { matrix[r.chofer][r.motivo] = (matrix[r.chofer][r.motivo] || 0) + r.monto; });
+
+  const header = ['Chofer'].concat(motivos).concat(['Total']);
+  const lines = [header.map(csvEscape).join(',')];
+  const colTotals = motivos.map(() => 0);
+  let grandTotal = 0;
+  choferes.forEach(ch => {
+    let rowTotal = 0;
+    const vals = motivos.map((m, i) => { const val = matrix[ch][m] || 0; rowTotal += val; colTotals[i] += val; return val.toFixed(2); });
+    grandTotal += rowTotal;
+    lines.push([ch].concat(vals).concat([rowTotal.toFixed(2)]).map(csvEscape).join(','));
+  });
+  lines.push(['Total'].concat(colTotals.map(t => t.toFixed(2))).concat([grandTotal.toFixed(2)]).map(csvEscape).join(','));
+  downloadBlob(`rechazos_por_motivo_${getCorteRange().to}.csv`, '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8;');
+}
 
 function renderMotivo() {
   document.querySelectorAll('.corteLabelInline').forEach(e => e.textContent = getCorteLabel());
@@ -947,6 +1049,10 @@ function wireEvents() {
   document.getElementById('docPrev').addEventListener('click', () => { state.doc.page = Math.max(0, state.doc.page - 1); drawDocumentos(); });
   document.getElementById('docNext').addEventListener('click', () => { state.doc.page += 1; drawDocumentos(); });
   document.getElementById('docExportCSV').addEventListener('click', exportDocumentosCSV);
+  document.getElementById('exportGeneralCSV').addEventListener('click', exportGeneralCSV);
+  document.getElementById('exportMotivoCSV').addEventListener('click', exportMotivoCSV);
+  document.getElementById('exportConductorCSV').addEventListener('click', exportConductorCSV);
+  document.getElementById('exportVendedorCSV').addEventListener('click', exportVendedorCSV);
 }
 
 /* ---------------- arranque ---------------- */
