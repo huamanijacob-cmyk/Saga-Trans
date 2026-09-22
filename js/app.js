@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 13 (cruce de chofer mira hasta 6 meses atras)');
+console.log('Panel de Rechazos — app.js version 15 (fix: filtro Sin identificar en Documentos)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -49,7 +49,7 @@ const FILE_CACHE = {};                              // 'Transportistas/Transport
 
 function fmtMoney(n) {
   n = Number(n) || 0;
-  return 'S/ ' + n.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return 'S/ ' + n.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 function fmtPct(n) {
   n = Number(n) || 0;
@@ -353,7 +353,7 @@ function renderGeneral() {
     if (monto <= 0.01) return;
     const hit = r._chofer;
     cross.push({
-      choferCod: hit ? (hit.codcho || 'SIN_COD') : 'SIN_CHOFER',
+      choferCod: hit && hit.codcho ? hit.codcho : 'SIN_CHOFER',
       chofer: hit ? (hit.nomcho || hit.codcho || 'Sin identificar') : 'Sin identificar',
       vendCod: vendedorKey(r),
       monto,
@@ -410,7 +410,7 @@ function renderGeneral() {
     let rowTotal = 0;
     vendCols.forEach((v, i) => {
       const val = matrix[ch][v];
-      const td = el('td', 'num rej', val ? val.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+      const td = el('td', 'num rej', val ? val.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '');
       td.style.textAlign = 'center';
       if (val) {
         td.classList.add('clickable');
@@ -421,7 +421,7 @@ function renderGeneral() {
       if (val) { rowTotal += val; colTotals[i] += val; }
     });
     grandTotal += rowTotal;
-    const tdTotal = el('td', 'num rej clickable', rowTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    const tdTotal = el('td', 'num rej clickable', rowTotal.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }));
     tdTotal.title = 'Ver documentos rechazados de este chofer';
     tdTotal.addEventListener('click', () => goToDocs({ chofer: ch }));
     tr.appendChild(tdTotal);
@@ -431,12 +431,12 @@ function renderGeneral() {
   const trFoot = el('tr');
   trFoot.appendChild(el('td', null, 'Total general'));
   colTotals.forEach((t, i) => {
-    const td = el('td', 'num rej', t.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    const td = el('td', 'num rej', t.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }));
     td.style.textAlign = 'center';
     if (t) { td.classList.add('clickable'); td.title = 'Ver documentos rechazados'; td.addEventListener('click', () => goToDocs({ vendedor: vendCols[i] })); }
     trFoot.appendChild(td);
   });
-  trFoot.appendChild(el('td', 'num rej', grandTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
+  trFoot.appendChild(el('td', 'num rej', grandTotal.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })));
   tfoot.appendChild(trFoot);
 
   document.getElementById('cross-note').textContent =
@@ -449,7 +449,7 @@ function aggregateConductor() {
   const map = {};
   CORTE_DATA.ventas.forEach(r => {
     const hit = r._chofer;
-    const key = hit ? (hit.codcho || 'SIN_COD') : 'SIN_CHOFER';
+    const key = hit && hit.codcho ? hit.codcho : 'SIN_CHOFER';
     if (!map[key]) map[key] = { cod: key, nombre: hit ? (hit.nomcho || hit.codcho) : 'Sin identificar', facturado: 0, monto: 0, pedidos: 0 };
     const soles = Number(r.soles) || 0;
     if (r.vtadvo === 'V') {
@@ -655,12 +655,18 @@ function populateDocFilterOptions(rows) {
   state.doc.vendor = vendorSel.value;
 
   const choferMap = {};
-  rows.forEach(r => { if (r._chofer && r._chofer.codcho) choferMap[r._chofer.codcho] = r._chofer.nomcho || r._chofer.codcho; });
+  let hayNoIdentificado = false;
+  rows.forEach(r => {
+    if (r._chofer && r._chofer.codcho) choferMap[r._chofer.codcho] = r._chofer.nomcho || r._chofer.codcho;
+    else hayNoIdentificado = true;
+  });
   const choferCods = Object.keys(choferMap).sort((a, b) => choferMap[a].localeCompare(choferMap[b]));
   choferSel.innerHTML = '';
   choferSel.appendChild(new Option('Todos', 'all'));
   choferCods.forEach(c => choferSel.appendChild(new Option(choferMap[c], c)));
-  choferSel.value = choferCods.includes(prevChofer) ? prevChofer : 'all';
+  if (hayNoIdentificado) choferSel.appendChild(new Option('Sin identificar', 'SIN_CHOFER'));
+  const choferValidos = choferCods.concat(hayNoIdentificado ? ['SIN_CHOFER'] : []);
+  choferSel.value = choferValidos.includes(prevChofer) ? prevChofer : 'all';
   state.doc.chofer = choferSel.value;
 
   const motivos = Array.from(new Set(rows.map(r => r._chofer && r._chofer.desmot).filter(Boolean))).sort();
@@ -679,7 +685,8 @@ function filteredDocRows() {
     const choferCod = r._chofer ? r._chofer.codcho : null;
     if (q && !((String(ventasDocNumber(r) || '')).toLowerCase().includes(q) || (String(r.nombrecliente || '')).toLowerCase().includes(q))) return false;
     if (state.doc.vendor !== 'all' && vendedorKey(r) !== state.doc.vendor) return false;
-    if (state.doc.chofer !== 'all' && choferCod !== state.doc.chofer) return false;
+    if (state.doc.chofer === 'SIN_CHOFER') { if (choferCod) return false; }
+    else if (state.doc.chofer !== 'all' && choferCod !== state.doc.chofer) return false;
     if (state.doc.motivo !== 'all' && (r._chofer && r._chofer.desmot) !== state.doc.motivo) return false;
     const monto = -(Number(r.soles) || 0);
     if (min !== null && monto < min) return false;
