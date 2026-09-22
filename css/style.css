@@ -135,6 +135,7 @@ button{transition:background .15s ease,color .15s ease,border-color .15s ease,bo
 
 .section-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
 .section-title{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;color:var(--ink);}
+.export-group{display:flex;gap:8px;}
 
 /* ---------- KPI cards ---------- */
 .kpi-grid{display:grid;gap:16px;}
