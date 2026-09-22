@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 12 (rechazo real: Ventas vtadvo V/D + cruce de chofer 2 pasos)');
+console.log('Panel de Rechazos — app.js version 13 (cruce de chofer mira hasta 6 meses atras)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -42,7 +42,7 @@ const state = {
 };
 
 let VENDOR_NAMES = {};                              // código -> nombre (se llena desde Ventas)
-let CORTE_DATA = { transportistas: [], ventas: [] };
+let CORTE_DATA = { ventas: [] };
 const FILE_CACHE = {};                              // 'Transportistas/Transportistas_2026-09.xlsx' -> filas ya parseadas
 
 /* ---------------- utilidades ---------------- */
@@ -273,19 +273,42 @@ function resolveChofer(ventaRow, docToChofer, ncRefToDoc) {
   return hit || null;
 }
 
+const JOIN_LOOKBACK_MONTHS = 6;
+
+function prevMonths(periodo, n) {
+  // Devuelve [periodo, periodo-1, ..., periodo-n] en formato 'YYYY-MM'.
+  const [y, m] = periodo.split('-').map(Number);
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const d = new Date(y, m - 1 - i, 1);
+    out.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`);
+  }
+  return out;
+}
+
+async function buildJoinMaps(uptoPeriodo) {
+  // Un rechazo puede procesarse en Ventas varios meses después del despacho
+  // que lo originó, así que el cruce documento->chofer mira hacia atrás
+  // (no solo el mes del corte) para encontrarlo igual.
+  const periodos = prevMonths(uptoPeriodo, JOIN_LOOKBACK_MONTHS);
+  const files = await Promise.all(periodos.map(p => Promise.all([
+    loadModuleFile('Transportistas', 'Transportistas', p),
+    loadModuleFile('ContabilidadNC', 'ContabilidadNC', p),
+  ])));
+  const allTransportistas = files.flatMap(f => f[0]);
+  const allNc = files.flatMap(f => f[1]);
+  return {
+    docToChofer: buildDocToChoferMap(allTransportistas),
+    ncRefToDoc: buildNcRefToDocMap(allNc),
+  };
+}
+
 async function loadCorteData() {
   const periodo = state.modo === 'dia' ? state.diaSel.slice(0, 7) : state.mesSel;
-  const [t, v, n] = await Promise.all([
-    loadModuleFile('Transportistas', 'Transportistas', periodo),
+  const [v, { docToChofer, ncRefToDoc }] = await Promise.all([
     loadModuleFile('Ventas', 'Ventas', periodo),
-    loadModuleFile('ContabilidadNC', 'ContabilidadNC', periodo),
+    buildJoinMaps(periodo),
   ]);
-
-  // Los mapas de cruce (documento -> chofer) se arman con el MES completo,
-  // no con el rango del día elegido, porque el despacho puede no coincidir
-  // exactamente con la fecha de venta.
-  const docToChofer = buildDocToChoferMap(t);
-  const ncRefToDoc = buildNcRefToDocMap(n);
 
   let ventas = v;
   if (state.modo === 'dia') {
@@ -295,7 +318,7 @@ async function loadCorteData() {
   // Resuelve y guarda el chofer de cada línea de venta una sola vez.
   ventas.forEach(r => { r._chofer = resolveChofer(r, docToChofer, ncRefToDoc); });
 
-  CORTE_DATA = { transportistas: t, ventas };
+  CORTE_DATA = { ventas };
 
   ventas.forEach(r => { if (r.vendedor && r.nombrevendedor && !VENDOR_NAMES[r.vendedor]) VENDOR_NAMES[r.vendedor] = r.nombrevendedor; });
 }
@@ -304,14 +327,9 @@ async function loadDocumentosData() {
   // "Documentos rechazados" = líneas de Ventas con vtadvo = 'D' (devolución).
   if (!state.doc.from || !state.doc.to) return [];
   const periodos = monthsBetween(state.doc.from, state.doc.to);
+  const { docToChofer, ncRefToDoc } = await buildJoinMaps(state.doc.to.slice(0, 7));
   const results = await Promise.all(periodos.map(async p => {
-    const [t, v, n] = await Promise.all([
-      loadModuleFile('Transportistas', 'Transportistas', p),
-      loadModuleFile('Ventas', 'Ventas', p),
-      loadModuleFile('ContabilidadNC', 'ContabilidadNC', p),
-    ]);
-    const docToChofer = buildDocToChoferMap(t);
-    const ncRefToDoc = buildNcRefToDocMap(n);
+    const v = await loadModuleFile('Ventas', 'Ventas', p);
     v.forEach(r => { r._chofer = resolveChofer(r, docToChofer, ncRefToDoc); });
     return v;
   }));
@@ -738,7 +756,7 @@ function setTab(tab) {
 }
 
 function renderAll() {
-  const bannerHayDatos = CORTE_DATA.transportistas.length || CORTE_DATA.ventas.length;
+  const bannerHayDatos = CORTE_DATA.ventas.length;
   const banner = document.getElementById('pendienteBanner');
   document.getElementById('corteLabel').textContent = getCorteLabel();
 
