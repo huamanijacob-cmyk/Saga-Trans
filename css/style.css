@@ -214,6 +214,8 @@ td{padding:14px 18px;font-size:14px;color:var(--ink);border-bottom:1px solid var
 tbody tr:hover td{background:#FBF9F4;}
 tr.clickable{cursor:pointer;}
 tr.clickable:hover td{background:#F0F4FA;}
+td.clickable{cursor:pointer;transition:background .12s ease;border-radius:6px;}
+td.clickable:hover{background:#F0F4FA;}
 tfoot tr{background:#F5F3ED;font-weight:600;}
 th button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
 th button:hover{color:var(--red);}
