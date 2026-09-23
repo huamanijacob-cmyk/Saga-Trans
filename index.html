@@ -90,6 +90,7 @@
           <button class="tab-btn" data-tab="vendedor">Por vendedor</button>
           <button class="tab-btn" data-tab="motivo">Rechazos por motivo</button>
           <button class="tab-btn" data-tab="documentos">Documentos rechazados</button>
+          <button class="tab-btn" data-tab="pdes">Choferes por PDE</button>
         </div>
 
         <!-- ===== TAB: VISTA GENERAL ===== -->
@@ -280,6 +281,22 @@
           </div>
         </section>
 
+        <!-- ===== TAB: CHOFERES POR PDE (mantenimiento) ===== -->
+        <section class="tab-panel" id="panel-pdes" style="display:none;">
+          <div class="card filter-card no-print">
+            <div class="filter-row">
+              <div class="filter-field" style="flex:1;">
+                <label>Buscar</label>
+                <input type="text" id="pdeSearch" placeholder="Buscar chofer o PDE...">
+              </div>
+            </div>
+          </div>
+          <div class="note" id="pdeResultLabel"></div>
+          <div class="card">
+            <div class="table-scroll"><table id="pde-table"><thead></thead><tbody></tbody></table></div>
+          </div>
+        </section>
+
       </div>
     </div>
   </div>
@@ -288,6 +305,6 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="js/config.js?v=4"></script>
-  <script src="js/app.js?v=28"></script>
+  <script src="js/app.js?v=29"></script>
 </body>
 </html>
