@@ -229,6 +229,12 @@ th button:hover{color:var(--red);}
 }
 .motivo-input:hover{border-color:var(--card-border);background:#FBF9F4;}
 .motivo-input:focus{border-color:var(--red);background:#FFFFFF;color:var(--ink);outline:none;}
+.motivo-select{
+  all:unset;width:100%;box-sizing:border-box;font-size:13px;color:var(--muted);padding:6px 8px;
+  border-radius:6px;border:1px solid transparent;cursor:pointer;
+}
+.motivo-select:hover{border-color:var(--card-border);background:#FBF9F4;}
+.motivo-select:focus{border-color:var(--red);background:#FFFFFF;color:var(--ink);outline:none;}
 .pct-bar{height:100%;border-radius:4px;transition:width .2s ease;}
 .pct-low{background:var(--teal);}
 .pct-mid{background:var(--amber);}
