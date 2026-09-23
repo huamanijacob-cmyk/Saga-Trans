@@ -285,6 +285,10 @@
         <section class="tab-panel" id="panel-pdes" style="display:none;">
           <div class="card filter-card no-print">
             <div class="filter-row">
+              <div class="filter-field">
+                <label>Chofer</label>
+                <select id="pdeChoferFilter"></select>
+              </div>
               <div class="filter-field" style="flex:1;">
                 <label>Buscar</label>
                 <input type="text" id="pdeSearch" placeholder="Buscar chofer o PDE...">
@@ -294,6 +298,11 @@
           <div class="note" id="pdeResultLabel"></div>
           <div class="card">
             <div class="table-scroll"><table id="pde-table"><thead></thead><tbody></tbody></table></div>
+          </div>
+          <div class="pager" style="justify-content:flex-end;display:flex;">
+            <button class="page-btn" id="pdePrev">&larr;</button>
+            <span id="pdePageLabel"></span>
+            <button class="page-btn" id="pdeNext">&rarr;</button>
           </div>
         </section>
 
@@ -305,6 +314,6 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="js/config.js?v=4"></script>
-  <script src="js/app.js?v=29"></script>
+  <script src="js/app.js?v=31"></script>
 </body>
 </html>
