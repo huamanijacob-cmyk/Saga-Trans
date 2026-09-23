@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 24 (motivo editable y persistente, fecha DD/MM/AAAA, ajustes varios)');
+console.log('Panel de Rechazos — app.js version 26 (motivo solo editable si viene vacio, se bloquea al guardar)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -366,7 +366,7 @@ function buildDocToChoferMap(transportistas) {
   const map = {};
   transportistas.forEach(r => {
     const doc = buildDocNumber(r);
-    if (doc) map[doc] = { codcho: r.codcho || null, nomcho: r.nomcho || r.codcho || null, desmot: r.desmot || null, pde: r.nrodsp || null };
+    if (doc) map[doc] = { codcho: r.codcho || null, nomcho: r.nomcho || r.codcho || null, desmot: r.desmot || null, desmotOriginal: r.desmot || null, pde: r.nrodsp || null };
   });
   return map;
 }
@@ -1122,6 +1122,47 @@ function codCliente(r) {
   return `${r.codclte || ''}${r.domic || ''}` || '';
 }
 
+function getKnownMotivos() {
+  return Array.from(new Set(DOC_ROWS_CACHE.map(r => r._chofer && r._chofer.desmot).filter(Boolean))).sort();
+}
+
+function buildMotivoEditor(pde, currentValue) {
+  const wrap = el('div');
+  const select = document.createElement('select');
+  select.className = 'motivo-select';
+  select.appendChild(new Option('— Sin motivo —', ''));
+  getKnownMotivos().forEach(m => select.appendChild(new Option(m, m)));
+  const esConocido = !currentValue || getKnownMotivos().includes(currentValue);
+  select.appendChild(new Option('Otro (escribir)...', '__otro__'));
+  select.value = esConocido ? currentValue : '__otro__';
+
+  const otroInput = document.createElement('input');
+  otroInput.type = 'text';
+  otroInput.className = 'motivo-input';
+  otroInput.placeholder = 'Escribe el motivo...';
+  otroInput.value = esConocido ? '' : currentValue;
+  otroInput.style.display = esConocido ? 'none' : '';
+
+  select.addEventListener('change', async () => {
+    if (select.value === '__otro__') {
+      otroInput.style.display = '';
+      otroInput.focus();
+      return;
+    }
+    otroInput.style.display = 'none';
+    await saveMotivoOverride(pde, select.value);
+    drawDocumentos();
+  });
+  otroInput.addEventListener('change', async (e) => {
+    await saveMotivoOverride(pde, e.target.value);
+    drawDocumentos();
+  });
+
+  wrap.appendChild(select);
+  wrap.appendChild(otroInput);
+  return wrap;
+}
+
 function drawDocumentos() {
   const rows = filteredDocRows();
   const sum = rows.reduce((s, r) => s + (Number(r.soles) || 0), 0);
@@ -1160,20 +1201,14 @@ function drawDocumentos() {
     tr.appendChild(el('td', 'mono muted', chofer || '<span class="muted" style="font-style:italic">sin identificar</span>'));
     const motivoTd = el('td');
     const pde = r._chofer && r._chofer.pde;
-    if (pde) {
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = (r._chofer && r._chofer.desmot) || '';
-      input.placeholder = 'Sin motivo — clic para agregar';
-      input.className = 'motivo-input';
-      input.addEventListener('change', async (e) => {
-        await saveMotivoOverride(pde, e.target.value);
-        drawDocumentos();
-      });
-      motivoTd.appendChild(input);
+    const yaTieneMotivoReal = !!(r._chofer && r._chofer.desmotOriginal);
+    const yaCorregido = !!(pde && MOTIVO_OVERRIDES[pde]);
+    if (pde && !yaTieneMotivoReal && !yaCorregido) {
+      motivoTd.appendChild(buildMotivoEditor(pde, (r._chofer && r._chofer.desmot) || ''));
     } else {
       motivoTd.className = 'muted';
       motivoTd.textContent = (r._chofer && r._chofer.desmot) || '';
+      if (yaCorregido) motivoTd.title = 'Corregido a mano — ya no se puede editar desde aquí.';
     }
     tr.appendChild(motivoTd);
     tr.appendChild(el('td', 'num rej', fmtMoneyNeg(Number(r.soles) || 0)));
