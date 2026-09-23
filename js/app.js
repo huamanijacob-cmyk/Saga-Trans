@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 29 (nueva pestaña: Choferes por PDE, para corregir aunque no haya rechazos)');
+console.log('Panel de Rechazos — app.js version 31 (filtro exacto por chofer en Choferes por PDE)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -1181,11 +1181,11 @@ function getKnownChoferes() {
   return Object.keys(map).sort((a, b) => map[a].localeCompare(map[b])).map(cod => ({ cod, nombre: map[cod] }));
 }
 
-function buildChoferEditor(pde, currentCod, currentNombre, onSaved) {
+function buildChoferEditor(pde, currentCod, currentNombre, onSaved, choferesList) {
   const select = document.createElement('select');
   select.className = 'motivo-select';
   select.appendChild(new Option('— Sin identificar —', ''));
-  const choferes = getKnownChoferes();
+  const choferes = (choferesList || getKnownChoferes()).slice();
   if (currentCod && !choferes.some(c => c.cod === currentCod)) choferes.push({ cod: currentCod, nombre: currentNombre });
   choferes.forEach(c => select.appendChild(new Option(c.nombre, c.cod)));
   select.value = currentCod || '';
@@ -1265,6 +1265,7 @@ function drawDocumentos() {
   </tr>`;
   const tbody = table.querySelector('tbody');
   tbody.innerHTML = '';
+  const choferesListDocs = getKnownChoferes();
   pageRows.forEach(r => {
     const chofer = r._chofer ? (r._chofer.nomcho || r._chofer.codcho) : null;
     const tr = el('tr');
@@ -1276,7 +1277,7 @@ function drawDocumentos() {
     const choferTd = el('td', 'mono muted');
     const pdeForChofer = r._chofer && r._chofer.pde;
     if (pdeForChofer) {
-      const sel = buildChoferEditor(pdeForChofer, r._chofer.codcho, chofer);
+      const sel = buildChoferEditor(pdeForChofer, r._chofer.codcho, chofer, drawDocumentos, choferesListDocs);
       if (r._chofer.choferCorregido) sel.title = 'Corregido a mano';
       choferTd.appendChild(sel);
     } else {
@@ -1377,6 +1378,8 @@ function renderAll() {
 /* ---------------- Choferes por PDE (mantenimiento) ---------------- */
 
 let PDE_SEARCH = '';
+let PDE_CHOFER_FILTER = 'all';
+let PDE_PAGE = 0;
 
 function renderPdes() {
   // Uno por PDE (varios documentos comparten el mismo PDE = mismo reparto),
@@ -1394,21 +1397,46 @@ function renderPdes() {
   });
 
   const q = PDE_SEARCH.toLowerCase();
-  const rows = Object.values(byPde)
+  const allEntries = Object.values(byPde);
+
+  // Puebla el desplegable con los choferes que realmente aparecen en la lista.
+  const choferSel = document.getElementById('pdeChoferFilter');
+  const prevFilter = PDE_CHOFER_FILTER;
+  const choferMap = {};
+  allEntries.forEach(h => { if (h.codcho) choferMap[h.codcho] = h.nomcho || h.codcho; });
+  const choferCods = Object.keys(choferMap).sort((a, b) => choferMap[a].localeCompare(choferMap[b]));
+  choferSel.innerHTML = '';
+  choferSel.appendChild(new Option('Todos', 'all'));
+  choferCods.forEach(c => choferSel.appendChild(new Option(choferMap[c], c)));
+  choferSel.value = choferCods.includes(prevFilter) ? prevFilter : 'all';
+  PDE_CHOFER_FILTER = choferSel.value;
+
+  const rows = allEntries
+    .filter(h => PDE_CHOFER_FILTER === 'all' || h.codcho === PDE_CHOFER_FILTER)
     .filter(h => !q || String(h.pde).toLowerCase().includes(q) || (h.nomcho || '').toLowerCase().includes(q) || (h.codcho || '').toLowerCase().includes(q))
     .sort((a, b) => (a.nomcho || '').localeCompare(b.nomcho || '') || String(a.pde).localeCompare(String(b.pde)));
 
-  document.getElementById('pdeResultLabel').textContent = `${rows.length} PDE encontrado(s) de ${Object.keys(byPde).length} en total (últimos ${JOIN_LOOKBACK_MONTHS + 1} meses) · el chofer siempre es editable aquí, tenga o no rechazos.`;
+  const pageSize = 30;
+  const maxPage = Math.max(0, Math.ceil(rows.length / pageSize) - 1);
+  PDE_PAGE = Math.min(PDE_PAGE, maxPage);
+  const pageRows = rows.slice(PDE_PAGE * pageSize, PDE_PAGE * pageSize + pageSize);
+
+  document.getElementById('pdeResultLabel').textContent = `${rows.length} PDE encontrado(s) de ${Object.keys(byPde).length} en total (últimos ${JOIN_LOOKBACK_MONTHS + 1} meses) · página ${PDE_PAGE + 1} de ${maxPage + 1} · el chofer siempre es editable aquí, tenga o no rechazos.`;
+  document.getElementById('pdePageLabel').textContent = `${PDE_PAGE + 1} / ${maxPage + 1}`;
+  document.getElementById('pdePrev').disabled = PDE_PAGE === 0;
+  document.getElementById('pdeNext').disabled = PDE_PAGE === maxPage;
+
+  const choferesList = getKnownChoferes(); // se calcula UNA vez para toda la página, no por fila
 
   const table = document.getElementById('pde-table');
   table.querySelector('thead').innerHTML = `<tr><th>PDE</th><th>Chofer</th></tr>`;
   const tbody = table.querySelector('tbody');
   tbody.innerHTML = '';
-  rows.forEach(h => {
+  pageRows.forEach(h => {
     const tr = el('tr');
     tr.appendChild(el('td', 'mono', h.pde));
     const td = el('td');
-    const sel = buildChoferEditor(h.pde, h.codcho, h.nomcho, renderPdes);
+    const sel = buildChoferEditor(h.pde, h.codcho, h.nomcho, renderPdes, choferesList);
     if (h.choferCorregido) sel.title = 'Corregido a mano';
     td.appendChild(sel);
     tr.appendChild(td);
@@ -1462,7 +1490,10 @@ function wireEvents() {
   document.getElementById('exportMotivoCSV').addEventListener('click', exportMotivoCSV);
   document.getElementById('exportConductorCSV').addEventListener('click', exportConductorCSV);
   document.getElementById('exportVendedorCSV').addEventListener('click', exportVendedorCSV);
-  document.getElementById('pdeSearch').addEventListener('input', e => { PDE_SEARCH = e.target.value; renderPdes(); });
+  document.getElementById('pdeSearch').addEventListener('input', e => { PDE_SEARCH = e.target.value; PDE_PAGE = 0; renderPdes(); });
+  document.getElementById('pdeChoferFilter').addEventListener('change', e => { PDE_CHOFER_FILTER = e.target.value; PDE_PAGE = 0; renderPdes(); });
+  document.getElementById('pdePrev').addEventListener('click', () => { PDE_PAGE = Math.max(0, PDE_PAGE - 1); renderPdes(); });
+  document.getElementById('pdeNext').addEventListener('click', () => { PDE_PAGE += 1; renderPdes(); });
 }
 
 /* ---------------- arranque ---------------- */
