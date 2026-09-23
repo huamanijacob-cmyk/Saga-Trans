@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 36 (selector "Buscar chofer desde" para controlar cuantos meses carga)');
+console.log('Panel de Rechazos — app.js version 37 (un solo filtro de fecha: reutiliza el rango de Cierre de mes)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -316,8 +316,14 @@ function initCorteControls() {
   state.mesSel = isoDate(hoy).slice(0, 7);
   state.diaSel = isoDate(hoy);
 
+  const ventana12 = lastNMonths(12, hoy);
+  // Reutiliza el mismo rango de "Cierre de mes" (el más antiguo que ya
+  // aparece ahí) como punto de partida para buscar el chofer hacia atrás —
+  // así no hay un segundo filtro de fechas por separado.
+  state.joinFrom = `${ventana12[0].year}-${pad(ventana12[0].month)}`;
+
   const sel = document.getElementById('mesSel');
-  lastNMonths(12, hoy).forEach(({ year, month }) => {
+  ventana12.forEach(({ year, month }) => {
     const val = `${year}-${pad(month)}`;
     const opt = el('option', null, `${MES_ABBR[month - 1]} ${year}`);
     opt.value = val;
@@ -325,21 +331,6 @@ function initCorteControls() {
     sel.appendChild(opt);
   });
   sel.addEventListener('change', () => { state.mesSel = sel.value; onCorteChanged(); });
-
-  const jf = document.getElementById('joinFromSel');
-  const jfDefault = new Date(hoy.getFullYear(), hoy.getMonth() - 2, 1); // 2 meses atrás, por velocidad
-  state.joinFrom = `${jfDefault.getFullYear()}-${pad(jfDefault.getMonth() + 1)}`;
-  let y = 2025, m = 1;
-  const hoyPeriodo = isoDate(hoy).slice(0, 7);
-  while (`${y}-${pad(m)}` <= hoyPeriodo) {
-    const val = `${y}-${pad(m)}`;
-    const opt = el('option', null, `${MES_ABBR[m - 1]}-${String(y).slice(2)}`);
-    opt.value = val;
-    if (val === state.joinFrom) opt.selected = true;
-    jf.appendChild(opt);
-    m++; if (m > 12) { m = 1; y++; }
-  }
-  jf.addEventListener('change', () => { state.joinFrom = jf.value; onCorteChanged(); });
 
   const dia = document.getElementById('diaSel');
   dia.value = state.diaSel;
