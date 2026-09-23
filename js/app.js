@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 31 (filtro exacto por chofer en Choferes por PDE)');
+console.log('Panel de Rechazos — app.js version 32 (chofer tambien se bloquea al corregirse, igual que motivo)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -1276,10 +1276,11 @@ function drawDocumentos() {
     tr.appendChild(el('td', 'mono muted', vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.vendedor] || r.nombrevendedor || ('Vendedor ' + r.vendedor))));
     const choferTd = el('td', 'mono muted');
     const pdeForChofer = r._chofer && r._chofer.pde;
-    if (pdeForChofer) {
-      const sel = buildChoferEditor(pdeForChofer, r._chofer.codcho, chofer, drawDocumentos, choferesListDocs);
-      if (r._chofer.choferCorregido) sel.title = 'Corregido a mano';
-      choferTd.appendChild(sel);
+    if (pdeForChofer && !CHOFER_OVERRIDES[pdeForChofer]) {
+      choferTd.appendChild(buildChoferEditor(pdeForChofer, r._chofer.codcho, chofer, drawDocumentos, choferesListDocs));
+    } else if (pdeForChofer) {
+      choferTd.textContent = chofer || '';
+      choferTd.title = 'Corregido a mano — ya no se puede editar desde aquí.';
     } else {
       choferTd.innerHTML = chofer || '<span class="muted" style="font-style:italic">sin identificar</span>';
     }
@@ -1436,9 +1437,13 @@ function renderPdes() {
     const tr = el('tr');
     tr.appendChild(el('td', 'mono', h.pde));
     const td = el('td');
-    const sel = buildChoferEditor(h.pde, h.codcho, h.nomcho, renderPdes, choferesList);
-    if (h.choferCorregido) sel.title = 'Corregido a mano';
-    td.appendChild(sel);
+    if (h.choferCorregido) {
+      td.className = 'mono muted';
+      td.textContent = h.nomcho || h.codcho || '';
+      td.title = 'Corregido a mano — ya no se puede editar desde aquí.';
+    } else {
+      td.appendChild(buildChoferEditor(h.pde, h.codcho, h.nomcho, renderPdes, choferesList));
+    }
     tr.appendChild(td);
     tbody.appendChild(tr);
   });
