@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 27 (fix: limpia basura invisible en el campo motivo)');
+console.log('Panel de Rechazos — app.js version 28 (chofer editable y persistente, pestaña renombrada a Por chofer)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -46,6 +46,8 @@ let CORTE_DATA = { ventas: [] };
 const FILE_CACHE = {};                              // 'Transportistas/Transportistas_2026-09.xlsx' -> filas ya parseadas
 let MOTIVO_OVERRIDES = {};                          // PDE -> motivo corregido a mano (persiste en Storage)
 const OVERRIDES_PATH = 'Overrides/motivo_overrides.json';
+let CHOFER_OVERRIDES = {};                          // PDE -> {codcho,nomcho} corregido a mano (persiste en Storage)
+const CHOFER_OVERRIDES_PATH = 'Overrides/chofer_overrides.json';
 
 /* ---------------- utilidades ---------------- */
 
@@ -406,6 +408,10 @@ function resolveChofer(ventaRow, docToChofer, ncDocToRef) {
   if (hit && hit.pde && MOTIVO_OVERRIDES[hit.pde] != null) {
     hit = { ...hit, desmot: MOTIVO_OVERRIDES[hit.pde] };
   }
+  if (hit && hit.pde && CHOFER_OVERRIDES[hit.pde]) {
+    const corr = CHOFER_OVERRIDES[hit.pde];
+    hit = { ...hit, codcho: corr.codcho, nomcho: corr.nomcho, choferCorregido: true };
+  }
   return hit || null;
 }
 
@@ -441,6 +447,42 @@ async function saveMotivoOverride(pde, motivo) {
     if (error) throw error;
   } catch (err) {
     console.error('No se pudo guardar la corrección de motivo en Storage:', err);
+    alert('No se pudo guardar el cambio en Supabase (revisa la política de escritura de Overrides/). El cambio queda solo en esta sesión por ahora.');
+  }
+}
+
+async function loadChoferOverrides() {
+  try {
+    const { data, error } = await supabaseClient.storage.from(STORAGE_BUCKET).download(CHOFER_OVERRIDES_PATH);
+    if (error) { CHOFER_OVERRIDES = {}; return; }
+    const text = await data.text();
+    CHOFER_OVERRIDES = text ? JSON.parse(text) : {};
+  } catch (err) {
+    console.warn('No se pudieron cargar las correcciones de chofer (probablemente aún no existen):', err.message);
+    CHOFER_OVERRIDES = {};
+  }
+}
+
+async function saveChoferOverride(pde, codcho, nomcho) {
+  if (!pde) return;
+  if (codcho) CHOFER_OVERRIDES[pde] = { codcho, nomcho };
+  else delete CHOFER_OVERRIDES[pde];
+
+  [CORTE_DATA.ventas, DOC_ROWS_CACHE].forEach(list => {
+    (list || []).forEach(r => {
+      if (r._chofer && r._chofer.pde === pde) {
+        if (codcho) { r._chofer.codcho = codcho; r._chofer.nomcho = nomcho; r._chofer.choferCorregido = true; }
+        else { r._chofer.choferCorregido = false; }
+      }
+    });
+  });
+
+  try {
+    const blob = new Blob([JSON.stringify(CHOFER_OVERRIDES, null, 2)], { type: 'application/json' });
+    const { error } = await supabaseClient.storage.from(STORAGE_BUCKET).upload(CHOFER_OVERRIDES_PATH, blob, { upsert: true, contentType: 'application/json' });
+    if (error) throw error;
+  } catch (err) {
+    console.error('No se pudo guardar la corrección de chofer en Storage:', err);
     alert('No se pudo guardar el cambio en Supabase (revisa la política de escritura de Overrides/). El cambio queda solo en esta sesión por ahora.');
   }
 }
@@ -1128,6 +1170,28 @@ function codCliente(r) {
   return `${r.codclte || ''}${r.domic || ''}` || '';
 }
 
+function getKnownChoferes() {
+  const map = {};
+  DOC_ROWS_CACHE.forEach(r => { if (r._chofer && r._chofer.codcho) map[r._chofer.codcho] = r._chofer.nomcho || r._chofer.codcho; });
+  return Object.keys(map).sort((a, b) => map[a].localeCompare(map[b])).map(cod => ({ cod, nombre: map[cod] }));
+}
+
+function buildChoferEditor(pde, currentCod, currentNombre) {
+  const select = document.createElement('select');
+  select.className = 'motivo-select';
+  select.appendChild(new Option('— Sin identificar —', ''));
+  const choferes = getKnownChoferes();
+  if (currentCod && !choferes.some(c => c.cod === currentCod)) choferes.push({ cod: currentCod, nombre: currentNombre });
+  choferes.forEach(c => select.appendChild(new Option(c.nombre, c.cod)));
+  select.value = currentCod || '';
+  select.addEventListener('change', async () => {
+    const chosen = choferes.find(c => c.cod === select.value);
+    await saveChoferOverride(pde, select.value || null, chosen ? chosen.nombre : null);
+    drawDocumentos();
+  });
+  return select;
+}
+
 function getKnownMotivos() {
   return Array.from(new Set(DOC_ROWS_CACHE.map(r => r._chofer && r._chofer.desmot).filter(Boolean))).sort();
 }
@@ -1204,7 +1268,16 @@ function drawDocumentos() {
     tr.appendChild(el('td', 'mono muted', codCliente(r)));
     tr.appendChild(el('td', null, r.nombrecliente || ''));
     tr.appendChild(el('td', 'mono muted', vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.vendedor] || r.nombrevendedor || ('Vendedor ' + r.vendedor))));
-    tr.appendChild(el('td', 'mono muted', chofer || '<span class="muted" style="font-style:italic">sin identificar</span>'));
+    const choferTd = el('td', 'mono muted');
+    const pdeForChofer = r._chofer && r._chofer.pde;
+    if (pdeForChofer) {
+      const sel = buildChoferEditor(pdeForChofer, r._chofer.codcho, chofer);
+      if (r._chofer.choferCorregido) sel.title = 'Corregido a mano';
+      choferTd.appendChild(sel);
+    } else {
+      choferTd.innerHTML = chofer || '<span class="muted" style="font-style:italic">sin identificar</span>';
+    }
+    tr.appendChild(choferTd);
     const motivoTd = el('td');
     const pde = r._chofer && r._chofer.pde;
     const yaTieneMotivoReal = !!(r._chofer && r._chofer.desmotOriginal);
@@ -1351,6 +1424,7 @@ async function bootApp() {
   initCorteControls();
   wireEvents();
   await loadMotivoOverrides();
+  await loadChoferOverrides();
   await loadCorteData();
   await renderDocumentos();
   renderAll();
