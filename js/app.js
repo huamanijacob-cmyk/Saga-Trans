@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 23 (exportaciones ahora son .xlsx con formato real, via ExcelJS)');
+console.log('Panel de Rechazos — app.js version 24 (motivo editable y persistente, fecha DD/MM/AAAA, ajustes varios)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -44,6 +44,8 @@ const state = {
 let VENDOR_NAMES = {};                              // código -> nombre (se llena desde Ventas)
 let CORTE_DATA = { ventas: [] };
 const FILE_CACHE = {};                              // 'Transportistas/Transportistas_2026-09.xlsx' -> filas ya parseadas
+let MOTIVO_OVERRIDES = {};                          // PDE -> motivo corregido a mano (persiste en Storage)
+const OVERRIDES_PATH = 'Overrides/motivo_overrides.json';
 
 /* ---------------- utilidades ---------------- */
 
@@ -82,8 +84,8 @@ function toISO(v) {
 function fmtFecha(v) {
   const iso = toISO(v);
   if (!iso) return '';
-  const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
 }
 function lastNMonths(n, ref) {
   const out = [];
@@ -141,6 +143,22 @@ const XL_STRIPE = 'FFFBF9F4';
 const XL_WHITE = 'FFFFFFFF';
 const XL_BORDER = { style: 'thin', color: { argb: 'FFE4E0D4' } };
 
+function calcColWidth(col, rows, totalsRow, i) {
+  const fmtForWidth = (v) => {
+    if (v == null || v === '') return '';
+    if (typeof v === 'number') {
+      // Aproxima cómo se va a ver ya formateado (miles con coma, % con 2 decimales).
+      if (col.numFmt && col.numFmt.indexOf('%') !== -1) return v.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+      return Math.round(v).toLocaleString('es-PE');
+    }
+    return String(v);
+  };
+  let max = String(col.header || '').length;
+  rows.forEach(r => { const s = fmtForWidth(r[i]); if (s.length > max) max = s.length; });
+  if (totalsRow) { const s = fmtForWidth(totalsRow[i]); if (s.length > max) max = s.length; }
+  return Math.min(Math.max(max + 3, col.width ? Math.min(col.width, 10) : 10), 48);
+}
+
 async function downloadStyledXlsx({ filename, sheetName, title, subtitle, columns, rows, totalsRow, groupHeader }) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Panel de Rechazos · Saga Trans Confitería';
@@ -189,7 +207,7 @@ async function downloadStyledXlsx({ filename, sheetName, title, subtitle, column
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_NAVY } };
     cell.border = { top: XL_BORDER, left: XL_BORDER, right: XL_BORDER, bottom: XL_BORDER };
-    ws.getColumn(i + 1).width = c.width || 16;
+    ws.getColumn(i + 1).width = calcColWidth(c, rows, totalsRow, i);
   });
   headerRow.height = 26;
 
@@ -379,7 +397,46 @@ function resolveChofer(ventaRow, docToChofer, ncDocToRef) {
     const ref = ncDocToRef[own];
     if (ref) hit = docToChofer[ref];
   }
+  if (hit && hit.pde && MOTIVO_OVERRIDES[hit.pde] != null) {
+    hit = { ...hit, desmot: MOTIVO_OVERRIDES[hit.pde] };
+  }
   return hit || null;
+}
+
+/* ---------------- correcciones de Motivo (persistentes en Storage) ---------------- */
+
+async function loadMotivoOverrides() {
+  try {
+    const { data, error } = await supabaseClient.storage.from(STORAGE_BUCKET).download(OVERRIDES_PATH);
+    if (error) { MOTIVO_OVERRIDES = {}; return; }
+    const text = await data.text();
+    MOTIVO_OVERRIDES = text ? JSON.parse(text) : {};
+  } catch (err) {
+    console.warn('No se pudieron cargar las correcciones de motivo (probablemente aún no existen):', err.message);
+    MOTIVO_OVERRIDES = {};
+  }
+}
+
+async function saveMotivoOverride(pde, motivo) {
+  if (!pde) return;
+  const value = (motivo || '').trim();
+  if (value) MOTIVO_OVERRIDES[pde] = value;
+  else delete MOTIVO_OVERRIDES[pde];
+
+  // Actualiza en memoria todas las filas ya cargadas que compartan ese PDE,
+  // para que se vea el cambio en todas las pestañas sin recargar la página.
+  [CORTE_DATA.ventas, DOC_ROWS_CACHE].forEach(list => {
+    (list || []).forEach(r => { if (r._chofer && r._chofer.pde === pde) r._chofer.desmot = value || null; });
+  });
+
+  try {
+    const blob = new Blob([JSON.stringify(MOTIVO_OVERRIDES, null, 2)], { type: 'application/json' });
+    const { error } = await supabaseClient.storage.from(STORAGE_BUCKET).upload(OVERRIDES_PATH, blob, { upsert: true, contentType: 'application/json' });
+    if (error) throw error;
+  } catch (err) {
+    console.error('No se pudo guardar la corrección de motivo en Storage:', err);
+    alert('No se pudo guardar el cambio en Supabase (revisa la política de escritura de Overrides/). El cambio queda solo en esta sesión por ahora.');
+  }
 }
 
 const JOIN_LOOKBACK_MONTHS = 6;
@@ -538,7 +595,6 @@ function renderGeneral() {
   thead.innerHTML = ''; tbody.innerHTML = ''; tfoot.innerHTML = '';
 
   if (!choferCods.length) {
-    document.getElementById('cross-note').textContent = 'No hay pedidos rechazados en este periodo.';
     return;
   }
 
@@ -546,7 +602,7 @@ function renderGeneral() {
   trTop.appendChild(el('th'));
   const thVend = el('th', null, 'Vendedores'); thVend.colSpan = vendCols.length; thVend.style.textAlign = 'center';
   trTop.appendChild(thVend);
-  const thTotal = el('th', null, 'Total<br>general'); thTotal.rowSpan = 2; thTotal.style.textAlign = 'center';
+  const thTotal = el('th', null, 'Total<br>general'); thTotal.rowSpan = 2; thTotal.style.textAlign = 'center'; thTotal.style.verticalAlign = 'middle'; thTotal.style.background = '#F5F3ED';
   trTop.appendChild(thTotal);
   thead.appendChild(trTop);
 
@@ -596,8 +652,6 @@ function renderGeneral() {
   trFoot.appendChild(el('td', 'num rej', grandTotal.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })));
   tfoot.appendChild(trFoot);
 
-  document.getElementById('cross-note').textContent =
-    'Datos reales de Ventas (líneas de devolución). El vendedor viene directo de cada línea; el chofer se resuelve cruzando el documento contra Transportistas — por eso puede haber líneas "sin identificar" si el cruce no encuentra el documento. Haz clic en cualquier celda para ver esos documentos.';
 }
 
 /* ---------------- Por conductor ---------------- */
@@ -608,16 +662,16 @@ async function exportConductorCSV() {
   const totalPct = totals.facturado ? totals.monto / totals.facturado : 0;
 
   const columns = [
-    { header: 'Conductor', width: 30 },
     { header: 'Código', width: 12, isCode: true, align: 'center' },
+    { header: 'Chofer', width: 30 },
     { header: 'Facturado', width: 16, numFmt: '#,##0', align: 'right' },
     { header: 'Venta real', width: 16, numFmt: '#,##0', align: 'right' },
     { header: 'Monto rechazado', width: 18, numFmt: '#,##0', align: 'right', red: true },
     { header: 'Pedidos', width: 12, numFmt: '#,##0', align: 'center' },
     { header: '% Rechazo', width: 13, numFmt: '0.00"%"', align: 'right', red: true },
   ];
-  const dataRows = rows.map(r => [r.nombre, r.cod, r.facturado, r.ventaReal, r.monto, r.pedidos, r.pct * 100]);
-  const totalsRow = ['Total general', '', totals.facturado, totals.ventaReal, totals.monto, totals.pedidos, totalPct * 100];
+  const dataRows = rows.map(r => [r.cod, r.nombre, r.facturado, r.ventaReal, r.monto, r.pedidos, r.pct * 100]);
+  const totalsRow = ['', 'Total general', totals.facturado, totals.ventaReal, totals.monto, totals.pedidos, totalPct * 100];
 
   await downloadStyledXlsx({
     filename: `por_conductor_${getCorteRange().to}.xlsx`,
@@ -677,7 +731,7 @@ function renderConductor() {
   const table = document.getElementById('cond-table');
   const thead = table.querySelector('thead'), tbody = table.querySelector('tbody'), tfoot = table.querySelector('tfoot');
   thead.innerHTML = `<tr>
-    <th><button data-sort="nombre">Conductor</button></th>
+    <th><button data-sort="nombre">Chofer</button></th>
     <th style="text-align:right"><button data-sort="facturado">Facturado</button></th>
     <th style="text-align:right">Venta real</th>
     <th style="text-align:right"><button data-sort="monto">Monto rech.</button></th>
@@ -717,7 +771,6 @@ function renderConductor() {
   trT.appendChild(el('td'));
   tfoot.appendChild(trT);
 
-  document.getElementById('cond-note').textContent = `Mostrando ${rows.length} de ${all.length} conductores · datos reales de Ventas (${getCorteLabel()}) · haz clic en un conductor para ver sus documentos.`;
 }
 
 function pctCell(pct, umbral) {
@@ -757,16 +810,16 @@ async function exportVendedorCSV() {
   const totalPct = totals.facturado ? totals.monto / totals.facturado : 0;
 
   const columns = [
-    { header: 'Vendedor', width: 30 },
     { header: 'Código', width: 12, isCode: true, align: 'center' },
+    { header: 'Vendedor', width: 30 },
     { header: 'Facturado', width: 16, numFmt: '#,##0', align: 'right' },
     { header: 'Venta real', width: 16, numFmt: '#,##0', align: 'right' },
     { header: 'Monto rechazado', width: 18, numFmt: '#,##0', align: 'right', red: true },
     { header: 'Pedidos', width: 12, numFmt: '#,##0', align: 'center' },
     { header: '% Rechazo', width: 13, numFmt: '0.00"%"', align: 'right', red: true },
   ];
-  const dataRows = rows.map(r => [vendedorLabel(r.cod), r.cod, r.facturado, r.ventaReal, r.monto, r.pedidos, r.pct * 100]);
-  const totalsRow = ['Total general', '', totals.facturado, totals.ventaReal, totals.monto, totals.pedidos, totalPct * 100];
+  const dataRows = rows.map(r => [r.cod, vendedorLabel(r.cod), r.facturado, r.ventaReal, r.monto, r.pedidos, r.pct * 100]);
+  const totalsRow = ['', 'Total general', totals.facturado, totals.ventaReal, totals.monto, totals.pedidos, totalPct * 100];
 
   await downloadStyledXlsx({
     filename: `por_vendedor_${getCorteRange().to}.xlsx`,
@@ -838,7 +891,6 @@ function renderVendedor() {
   trT.appendChild(el('td'));
   tfoot.appendChild(trT);
 
-  document.getElementById('vend-note').textContent = `Datos reales de Ventas (${getCorteLabel()}) · estos montos cuadran con Por conductor y Vista general · haz clic en un vendedor para ver sus documentos.`;
 }
 
 /* ---------------- Rechazos por motivo / reparto ---------------- */
@@ -927,7 +979,6 @@ function renderMotivo() {
   thead.innerHTML = ''; tbody.innerHTML = ''; tfoot.innerHTML = '';
 
   if (!choferes.length) {
-    document.getElementById('motivo-note').textContent = 'No hay líneas rechazadas en este periodo.';
     return;
   }
 
@@ -976,8 +1027,6 @@ function renderMotivo() {
   trFoot.appendChild(el('td', 'num rej', fmtMoneyNeg(grandTotal)));
   tfoot.appendChild(trFoot);
 
-  document.getElementById('motivo-note').textContent =
-    'Datos reales de Ventas (líneas de devolución), agrupadas por chofer y motivo de rechazo · "Venta Oficina" son las líneas sin chofer identificado · haz clic en una celda para ver esos documentos.';
 }
 
 function findChoferCod(nombre) {
@@ -1056,6 +1105,10 @@ function filteredDocRows() {
     if (min !== null && monto < min) return false;
     if (max !== null && monto > max) return false;
     return true;
+  }).sort((a, b) => {
+    const da = toISO(a.fecha) || '';
+    const db = toISO(b.fecha) || '';
+    return da.localeCompare(db);
   });
 }
 
@@ -1105,7 +1158,24 @@ function drawDocumentos() {
     tr.appendChild(el('td', null, r.nombrecliente || ''));
     tr.appendChild(el('td', 'mono muted', vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.vendedor] || r.nombrevendedor || ('Vendedor ' + r.vendedor))));
     tr.appendChild(el('td', 'mono muted', chofer || '<span class="muted" style="font-style:italic">sin identificar</span>'));
-    tr.appendChild(el('td', 'muted', (r._chofer && r._chofer.desmot) || ''));
+    const motivoTd = el('td');
+    const pde = r._chofer && r._chofer.pde;
+    if (pde) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = (r._chofer && r._chofer.desmot) || '';
+      input.placeholder = 'Sin motivo — clic para agregar';
+      input.className = 'motivo-input';
+      input.addEventListener('change', async (e) => {
+        await saveMotivoOverride(pde, e.target.value);
+        drawDocumentos();
+      });
+      motivoTd.appendChild(input);
+    } else {
+      motivoTd.className = 'muted';
+      motivoTd.textContent = (r._chofer && r._chofer.desmot) || '';
+    }
+    tr.appendChild(motivoTd);
     tr.appendChild(el('td', 'num rej', fmtMoneyNeg(Number(r.soles) || 0)));
     tbody.appendChild(tr);
   });
@@ -1239,6 +1309,7 @@ function wireEvents() {
 async function bootApp() {
   initCorteControls();
   wireEvents();
+  await loadMotivoOverrides();
   await loadCorteData();
   await renderDocumentos();
   renderAll();
