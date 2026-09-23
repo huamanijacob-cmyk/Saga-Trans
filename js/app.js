@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 26 (motivo solo editable si viene vacio, se bloquea al guardar)');
+console.log('Panel de Rechazos — app.js version 27 (fix: limpia basura invisible en el campo motivo)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -366,7 +366,13 @@ function buildDocToChoferMap(transportistas) {
   const map = {};
   transportistas.forEach(r => {
     const doc = buildDocNumber(r);
-    if (doc) map[doc] = { codcho: r.codcho || null, nomcho: r.nomcho || r.codcho || null, desmot: r.desmot || null, desmotOriginal: r.desmot || null, pde: r.nrodsp || null };
+    if (doc) {
+      // Algunas celdas "vacías" en el Excel en realidad traen basura
+      // invisible (saltos de línea, espacios) en vez de estar realmente
+      // vacías — hay que limpiarlas o JS las trata como "con contenido".
+      const desmotClean = (r.desmot == null ? '' : String(r.desmot)).replace(/[\r\n]+/g, '').trim();
+      map[doc] = { codcho: r.codcho || null, nomcho: r.nomcho || r.codcho || null, desmot: desmotClean || null, desmotOriginal: desmotClean || null, pde: r.nrodsp || null };
+    }
   });
   return map;
 }
