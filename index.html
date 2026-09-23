@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel de Rechazos · Saga Trans Confitería</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=9">
+<link rel="stylesheet" href="css/style.css?v=10">
 </head>
 <body>
 
@@ -116,7 +116,6 @@
             <div class="card">
               <div class="table-scroll"><table id="cross-table"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
             </div>
-            <div class="note" id="cross-note"></div>
           </div>
         </section>
 
@@ -136,7 +135,7 @@
             </div>
           </div>
           <div class="no-print toolbar">
-            <input type="text" id="condSearch" placeholder="Buscar conductor o código...">
+            <input type="text" id="condSearch" placeholder="Buscar chofer o código...">
             <div class="alert-group">
               <button class="alert-btn" id="condAlertToggle">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C1432B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
@@ -159,7 +158,6 @@
               <div class="table-scroll"><table id="cond-table"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
             </div>
           </div>
-          <div class="note" id="cond-note"></div>
         </section>
 
         <!-- ===== TAB: POR VENDEDOR ===== -->
@@ -190,7 +188,6 @@
               <div class="table-scroll"><table id="vend-table"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
             </div>
           </div>
-          <div class="note" id="vend-note"></div>
         </section>
 
         <!-- ===== TAB: RECHAZOS POR MOTIVO / REPARTO ===== -->
@@ -218,7 +215,6 @@
               <div class="table-scroll"><table id="motivo-table"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
             </div>
           </div>
-          <div class="note" id="motivo-note"></div>
         </section>
 
         <!-- ===== TAB: DOCUMENTOS RECHAZADOS ===== -->
@@ -275,7 +271,7 @@
             <div class="table-scroll"><table id="doc-table"><thead></thead><tbody></tbody></table></div>
           </div>
           <div class="doc-footer">
-            <div class="note">Cliente y Vendedor vienen del cruce por N° de Documento con Ventas/Contabilidad NC.</div>
+            <div></div>
             <div class="pager">
               <button class="page-btn" id="docPrev">&larr;</button>
               <span id="docPageLabel"></span>
@@ -292,6 +288,6 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="js/config.js?v=4"></script>
-  <script src="js/app.js?v=23"></script>
+  <script src="js/app.js?v=24"></script>
 </body>
 </html>
