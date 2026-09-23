@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 28 (chofer editable y persistente, pestaña renombrada a Por chofer)');
+console.log('Panel de Rechazos — app.js version 29 (nueva pestaña: Choferes por PDE, para corregir aunque no haya rechazos)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -500,6 +500,8 @@ function prevMonths(periodo, n) {
   return out;
 }
 
+let LAST_DOC_TO_CHOFER = {};
+
 async function buildJoinMaps(uptoPeriodo) {
   // Un rechazo puede procesarse en Ventas varios meses después del despacho
   // que lo originó, así que el cruce documento->chofer mira hacia atrás
@@ -511,8 +513,10 @@ async function buildJoinMaps(uptoPeriodo) {
   ])));
   const allTransportistas = files.flatMap(f => f[0]);
   const allNc = files.flatMap(f => f[1]);
+  const docToChofer = buildDocToChoferMap(allTransportistas);
+  LAST_DOC_TO_CHOFER = docToChofer;
   return {
-    docToChofer: buildDocToChoferMap(allTransportistas),
+    docToChofer,
     ncDocToRef: buildNcDocToRefMap(allNc),
   };
 }
@@ -1173,10 +1177,11 @@ function codCliente(r) {
 function getKnownChoferes() {
   const map = {};
   DOC_ROWS_CACHE.forEach(r => { if (r._chofer && r._chofer.codcho) map[r._chofer.codcho] = r._chofer.nomcho || r._chofer.codcho; });
+  Object.values(LAST_DOC_TO_CHOFER).forEach(h => { if (h.codcho && !map[h.codcho]) map[h.codcho] = h.nomcho || h.codcho; });
   return Object.keys(map).sort((a, b) => map[a].localeCompare(map[b])).map(cod => ({ cod, nombre: map[cod] }));
 }
 
-function buildChoferEditor(pde, currentCod, currentNombre) {
+function buildChoferEditor(pde, currentCod, currentNombre, onSaved) {
   const select = document.createElement('select');
   select.className = 'motivo-select';
   select.appendChild(new Option('— Sin identificar —', ''));
@@ -1187,7 +1192,7 @@ function buildChoferEditor(pde, currentCod, currentNombre) {
   select.addEventListener('change', async () => {
     const chosen = choferes.find(c => c.cod === select.value);
     await saveChoferOverride(pde, select.value || null, chosen ? chosen.nombre : null);
-    drawDocumentos();
+    (onSaved || drawDocumentos)();
   });
   return select;
 }
@@ -1343,7 +1348,7 @@ async function exportDocumentosCSV() {
 function setTab(tab) {
   state.tab = tab;
   document.querySelectorAll('.tabbar .tab-btn').forEach(b => b.classList.toggle('tab-active', b.dataset.tab === tab));
-  ['general', 'conductor', 'vendedor', 'motivo', 'documentos'].forEach(t => {
+  ['general', 'conductor', 'vendedor', 'motivo', 'documentos', 'pdes'].forEach(t => {
     document.getElementById('panel-' + t).style.display = (t === tab) ? '' : 'none';
   });
   renderAll();
@@ -1354,7 +1359,7 @@ function renderAll() {
   const banner = document.getElementById('pendienteBanner');
   document.getElementById('corteLabel').textContent = getCorteLabel();
 
-  if (state.tab !== 'documentos' && state.tab !== 'motivo' && !bannerHayDatos) {
+  if (state.tab !== 'documentos' && state.tab !== 'motivo' && state.tab !== 'pdes' && !bannerHayDatos) {
     banner.style.display = 'flex';
     banner.textContent = `Todavía no hay datos cargados para ${getCorteLabel()}. Sube los 3 Excel de ese mes a Storage y este panel se completa solo.`;
   } else {
@@ -1366,9 +1371,50 @@ function renderAll() {
   else if (state.tab === 'vendedor') renderVendedor();
   else if (state.tab === 'motivo') renderMotivo();
   else if (state.tab === 'documentos') drawDocumentos();
+  else if (state.tab === 'pdes') renderPdes();
 }
 
-/* ---------------- impresión (solo el cuadro) ---------------- */
+/* ---------------- Choferes por PDE (mantenimiento) ---------------- */
+
+let PDE_SEARCH = '';
+
+function renderPdes() {
+  // Uno por PDE (varios documentos comparten el mismo PDE = mismo reparto),
+  // así se puede corregir el chofer aunque ese PDE no tenga ningún rechazo.
+  const byPde = {};
+  Object.values(LAST_DOC_TO_CHOFER).forEach(hit => {
+    if (!hit.pde) return;
+    if (!byPde[hit.pde]) byPde[hit.pde] = hit;
+  });
+  // Aplica correcciones ya guardadas.
+  Object.keys(byPde).forEach(pde => {
+    if (CHOFER_OVERRIDES[pde]) {
+      byPde[pde] = { ...byPde[pde], codcho: CHOFER_OVERRIDES[pde].codcho, nomcho: CHOFER_OVERRIDES[pde].nomcho, choferCorregido: true };
+    }
+  });
+
+  const q = PDE_SEARCH.toLowerCase();
+  const rows = Object.values(byPde)
+    .filter(h => !q || String(h.pde).toLowerCase().includes(q) || (h.nomcho || '').toLowerCase().includes(q) || (h.codcho || '').toLowerCase().includes(q))
+    .sort((a, b) => (a.nomcho || '').localeCompare(b.nomcho || '') || String(a.pde).localeCompare(String(b.pde)));
+
+  document.getElementById('pdeResultLabel').textContent = `${rows.length} PDE encontrado(s) de ${Object.keys(byPde).length} en total (últimos ${JOIN_LOOKBACK_MONTHS + 1} meses) · el chofer siempre es editable aquí, tenga o no rechazos.`;
+
+  const table = document.getElementById('pde-table');
+  table.querySelector('thead').innerHTML = `<tr><th>PDE</th><th>Chofer</th></tr>`;
+  const tbody = table.querySelector('tbody');
+  tbody.innerHTML = '';
+  rows.forEach(h => {
+    const tr = el('tr');
+    tr.appendChild(el('td', 'mono', h.pde));
+    const td = el('td');
+    const sel = buildChoferEditor(h.pde, h.codcho, h.nomcho, renderPdes);
+    if (h.choferCorregido) sel.title = 'Corregido a mano';
+    td.appendChild(sel);
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  });
+}
 
 function printTarget(id) {
   const node = document.getElementById(id);
@@ -1416,6 +1462,7 @@ function wireEvents() {
   document.getElementById('exportMotivoCSV').addEventListener('click', exportMotivoCSV);
   document.getElementById('exportConductorCSV').addEventListener('click', exportConductorCSV);
   document.getElementById('exportVendedorCSV').addEventListener('click', exportVendedorCSV);
+  document.getElementById('pdeSearch').addEventListener('input', e => { PDE_SEARCH = e.target.value; renderPdes(); });
 }
 
 /* ---------------- arranque ---------------- */
