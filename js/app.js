@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 32 (chofer tambien se bloquea al corregirse, igual que motivo)');
+console.log('Panel de Rechazos — app.js version 36 (selector "Buscar chofer desde" para controlar cuantos meses carga)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -36,6 +36,7 @@ const state = {
   modo: 'mes',            // 'mes' | 'dia'
   mesSel: null,           // 'YYYY-MM'
   diaSel: null,           // 'YYYY-MM-DD'
+  joinFrom: null,         // 'YYYY-MM' — desde dónde buscar el chofer hacia atrás
   cond: { search: '', onlyAlerts: false, umbral: 2, sortKey: 'pct', sortDir: 'desc' },
   vend: { search: '' },
   doc:  { search: '', vendor: 'all', chofer: 'all', motivo: 'all', montoMin: '', montoMax: '', from: null, to: null, page: 0 },
@@ -325,6 +326,21 @@ function initCorteControls() {
   });
   sel.addEventListener('change', () => { state.mesSel = sel.value; onCorteChanged(); });
 
+  const jf = document.getElementById('joinFromSel');
+  const jfDefault = new Date(hoy.getFullYear(), hoy.getMonth() - 2, 1); // 2 meses atrás, por velocidad
+  state.joinFrom = `${jfDefault.getFullYear()}-${pad(jfDefault.getMonth() + 1)}`;
+  let y = 2025, m = 1;
+  const hoyPeriodo = isoDate(hoy).slice(0, 7);
+  while (`${y}-${pad(m)}` <= hoyPeriodo) {
+    const val = `${y}-${pad(m)}`;
+    const opt = el('option', null, `${MES_ABBR[m - 1]}-${String(y).slice(2)}`);
+    opt.value = val;
+    if (val === state.joinFrom) opt.selected = true;
+    jf.appendChild(opt);
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  jf.addEventListener('change', () => { state.joinFrom = jf.value; onCorteChanged(); });
+
   const dia = document.getElementById('diaSel');
   dia.value = state.diaSel;
   dia.addEventListener('change', () => { state.diaSel = dia.value; onCorteChanged(); });
@@ -487,15 +503,15 @@ async function saveChoferOverride(pde, codcho, nomcho) {
   }
 }
 
-const JOIN_LOOKBACK_MONTHS = 6;
-
-function prevMonths(periodo, n) {
-  // Devuelve [periodo, periodo-1, ..., periodo-n] en formato 'YYYY-MM'.
-  const [y, m] = periodo.split('-').map(Number);
+function monthsInRange(from, to) {
+  // Devuelve ['YYYY-MM', ...] desde "from" hasta "to" (inclusive), en orden.
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
   const out = [];
-  for (let i = 0; i <= n; i++) {
-    const d = new Date(y, m - 1 - i, 1);
-    out.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`);
+  let y = fy, m = fm;
+  while (y < ty || (y === ty && m <= tm)) {
+    out.push(`${y}-${pad(m)}`);
+    m++; if (m > 12) { m = 1; y++; }
   }
   return out;
 }
@@ -505,8 +521,10 @@ let LAST_DOC_TO_CHOFER = {};
 async function buildJoinMaps(uptoPeriodo) {
   // Un rechazo puede procesarse en Ventas varios meses después del despacho
   // que lo originó, así que el cruce documento->chofer mira hacia atrás
-  // (no solo el mes del corte) para encontrarlo igual.
-  const periodos = prevMonths(uptoPeriodo, JOIN_LOOKBACK_MONTHS);
+  // (no solo el mes del corte) para encontrarlo igual. Cuánto atrás mirar
+  // lo controla el selector "Buscar chofer desde" del encabezado.
+  const desde = state.joinFrom && state.joinFrom <= uptoPeriodo ? state.joinFrom : uptoPeriodo;
+  const periodos = monthsInRange(desde, uptoPeriodo);
   const files = await Promise.all(periodos.map(p => Promise.all([
     loadModuleFile('Transportistas', 'Transportistas', p),
     loadModuleFile('ContabilidadNC', 'ContabilidadNC', p),
@@ -1265,7 +1283,6 @@ function drawDocumentos() {
   </tr>`;
   const tbody = table.querySelector('tbody');
   tbody.innerHTML = '';
-  const choferesListDocs = getKnownChoferes();
   pageRows.forEach(r => {
     const chofer = r._chofer ? (r._chofer.nomcho || r._chofer.codcho) : null;
     const tr = el('tr');
@@ -1274,16 +1291,7 @@ function drawDocumentos() {
     tr.appendChild(el('td', 'mono muted', codCliente(r)));
     tr.appendChild(el('td', null, r.nombrecliente || ''));
     tr.appendChild(el('td', 'mono muted', vendedorKey(r) === 'OFICINA' ? 'Vendedor Oficina' : (VENDOR_NAMES[r.vendedor] || r.nombrevendedor || ('Vendedor ' + r.vendedor))));
-    const choferTd = el('td', 'mono muted');
-    const pdeForChofer = r._chofer && r._chofer.pde;
-    if (pdeForChofer && !CHOFER_OVERRIDES[pdeForChofer]) {
-      choferTd.appendChild(buildChoferEditor(pdeForChofer, r._chofer.codcho, chofer, drawDocumentos, choferesListDocs));
-    } else if (pdeForChofer) {
-      choferTd.textContent = chofer || '';
-      choferTd.title = 'Corregido a mano — ya no se puede editar desde aquí.';
-    } else {
-      choferTd.innerHTML = chofer || '<span class="muted" style="font-style:italic">sin identificar</span>';
-    }
+    const choferTd = el('td', 'mono muted', chofer || '<span class="muted" style="font-style:italic">sin identificar</span>');
     tr.appendChild(choferTd);
     const motivoTd = el('td');
     const pde = r._chofer && r._chofer.pde;
@@ -1379,7 +1387,6 @@ function renderAll() {
 /* ---------------- Choferes por PDE (mantenimiento) ---------------- */
 
 let PDE_SEARCH = '';
-let PDE_CHOFER_FILTER = 'all';
 let PDE_PAGE = 0;
 
 function renderPdes() {
@@ -1400,29 +1407,25 @@ function renderPdes() {
   const q = PDE_SEARCH.toLowerCase();
   const allEntries = Object.values(byPde);
 
-  // Puebla el desplegable con los choferes que realmente aparecen en la lista.
-  const choferSel = document.getElementById('pdeChoferFilter');
-  const prevFilter = PDE_CHOFER_FILTER;
+  // Vista fija: solo el chofer que sabemos que está mal asignado. Si más
+  // adelante hay otro caso, se cambia aquí (HUAMANI_TARGET_REGEX).
   const choferMap = {};
   allEntries.forEach(h => { if (h.codcho) choferMap[h.codcho] = h.nomcho || h.codcho; });
-  const choferCods = Object.keys(choferMap).sort((a, b) => choferMap[a].localeCompare(choferMap[b]));
-  choferSel.innerHTML = '';
-  choferSel.appendChild(new Option('Todos', 'all'));
-  choferCods.forEach(c => choferSel.appendChild(new Option(choferMap[c], c)));
-  choferSel.value = choferCods.includes(prevFilter) ? prevFilter : 'all';
-  PDE_CHOFER_FILTER = choferSel.value;
+  const huamaniCod = Object.keys(choferMap).find(c => /HUAMANI/i.test(choferMap[c]) && /JUAN/i.test(choferMap[c]));
+  const badge = document.getElementById('pdeChoferFixed');
+  badge.textContent = huamaniCod ? choferMap[huamaniCod] : 'No encontrado en este corte';
 
   const rows = allEntries
-    .filter(h => PDE_CHOFER_FILTER === 'all' || h.codcho === PDE_CHOFER_FILTER)
-    .filter(h => !q || String(h.pde).toLowerCase().includes(q) || (h.nomcho || '').toLowerCase().includes(q) || (h.codcho || '').toLowerCase().includes(q))
-    .sort((a, b) => (a.nomcho || '').localeCompare(b.nomcho || '') || String(a.pde).localeCompare(String(b.pde)));
+    .filter(h => huamaniCod ? h.codcho === huamaniCod : false)
+    .filter(h => !q || String(h.pde).toLowerCase().includes(q))
+    .sort((a, b) => String(a.pde).localeCompare(String(b.pde)));
 
   const pageSize = 30;
   const maxPage = Math.max(0, Math.ceil(rows.length / pageSize) - 1);
   PDE_PAGE = Math.min(PDE_PAGE, maxPage);
   const pageRows = rows.slice(PDE_PAGE * pageSize, PDE_PAGE * pageSize + pageSize);
 
-  document.getElementById('pdeResultLabel').textContent = `${rows.length} PDE encontrado(s) de ${Object.keys(byPde).length} en total (últimos ${JOIN_LOOKBACK_MONTHS + 1} meses) · página ${PDE_PAGE + 1} de ${maxPage + 1} · el chofer siempre es editable aquí, tenga o no rechazos.`;
+  document.getElementById('pdeResultLabel').textContent = `${rows.length} PDE encontrado(s) de ${Object.keys(byPde).length}`;
   document.getElementById('pdePageLabel').textContent = `${PDE_PAGE + 1} / ${maxPage + 1}`;
   document.getElementById('pdePrev').disabled = PDE_PAGE === 0;
   document.getElementById('pdeNext').disabled = PDE_PAGE === maxPage;
@@ -1496,7 +1499,6 @@ function wireEvents() {
   document.getElementById('exportConductorCSV').addEventListener('click', exportConductorCSV);
   document.getElementById('exportVendedorCSV').addEventListener('click', exportVendedorCSV);
   document.getElementById('pdeSearch').addEventListener('input', e => { PDE_SEARCH = e.target.value; PDE_PAGE = 0; renderPdes(); });
-  document.getElementById('pdeChoferFilter').addEventListener('change', e => { PDE_CHOFER_FILTER = e.target.value; PDE_PAGE = 0; renderPdes(); });
   document.getElementById('pdePrev').addEventListener('click', () => { PDE_PAGE = Math.max(0, PDE_PAGE - 1); renderPdes(); });
   document.getElementById('pdeNext').addEventListener('click', () => { PDE_PAGE += 1; renderPdes(); });
 }
@@ -1558,6 +1560,7 @@ async function showApp(session) {
 
   if (!appBooted) {
     appBooted = true;
+    const overlay = document.getElementById('loadingOverlay');
     try {
       if (typeof XLSX === 'undefined') throw new Error('SheetJS (XLSX) no cargó — revisa el <script> de xlsx en index.html.');
       await bootApp();
@@ -1565,6 +1568,8 @@ async function showApp(session) {
       console.error(err);
       document.querySelector('.wrap').innerHTML =
         `<div class="empty-state"><div class="empty-title">No se pudo cargar el panel</div><div class="empty-text">${err.message}</div></div>`;
+    } finally {
+      if (overlay) overlay.style.display = 'none';
     }
   }
 }
