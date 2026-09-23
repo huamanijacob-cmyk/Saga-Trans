@@ -6,6 +6,7 @@
 <title>Panel de Rechazos · Saga Trans Confitería</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css?v=16">
+<link rel="stylesheet" href="css/ventas.css?v=1">
 </head>
 <body>
 
@@ -44,11 +45,11 @@
       <div class="rail-logo">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
       </div>
-      <button class="rail-item rail-active" title="Rechazos">
+      <button class="rail-item rail-active" id="railRechazos" title="Rechazos">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
         <span class="rail-label">Rechazos</span>
       </button>
-      <button class="rail-item" title="Ventas — próximamente">
+      <button class="rail-item" id="railVentas" title="Ventas">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
         <span class="rail-label">Ventas</span>
       </button>
@@ -63,7 +64,7 @@
     </div>
 
     <div class="content-pad">
-      <div class="wrap">
+      <div class="wrap" id="modRechazos">
 
         <!-- Header -->
         <div class="page-header">
@@ -315,6 +316,192 @@
         </section>
 
       </div>
+
+        <!-- ===================================================== -->
+        <!-- ===== MÓDULO VENTAS (js/ventas.js, css/ventas.css) ===== -->
+        <!-- ===================================================== -->
+        <div class="wrap" id="modVentas" style="display:none;">
+
+          <div class="page-header">
+            <div>
+              <div class="eyebrow">Ventas · Saga Trans Confitería</div>
+              <h1 class="page-title">Panel de Ventas</h1>
+              <div class="subtitle">Corte al <span id="vCorteLabel">—</span></div>
+            </div>
+            <div class="no-print corte-controls">
+              <div class="segmented">
+                <button class="tab-btn tab-active" id="vModoMes">Cierre de mes</button>
+                <button class="tab-btn" id="vModoDia">Día específico</button>
+              </div>
+              <select id="vMesSel" class="input-select"></select>
+              <input type="date" id="vDiaSel" class="input-select" style="display:none;">
+              <div class="account-pill">
+                <div class="account-avatar" id="vUserAvatar">—</div>
+                <span class="account-email" id="vUserEmail">—</span>
+                <button class="logout-btn" id="vLogoutBtn" title="Cerrar sesión">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="no-print v-infobar">
+            <div class="v-habiles" id="vHabiles"><span class="v-dot"></span>Días hábiles: —</div>
+            <div class="export-group">
+              <button class="export-btn" id="vBtnCalendario" aria-expanded="false">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                <span id="vBtnCalendarioTxt">Ver calendario</span>
+              </button>
+              <button class="export-btn" id="vBtnRecargar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+                Actualizar datos
+              </button>
+            </div>
+          </div>
+          <div class="card v-cal no-print" id="vCalendario" style="display:none;"></div>
+          <div class="v-avisos no-print" id="vAvisos"></div>
+
+          <div class="no-print v-tabbar">
+            <button class="tab-btn tab-active" data-vtab="avance">Avance general</button>
+            <button class="tab-btn" data-vtab="cobertura">Cobertura</button>
+            <button class="tab-btn" data-vtab="documentos">Documentos</button>
+            <button class="tab-btn" data-vtab="alertas">Alertas<span class="v-count zero" id="vAlertasCount">0</span></button>
+          </div>
+
+          <!-- ===== VENTAS · AVANCE GENERAL ===== -->
+          <section class="tab-panel" id="vpanel-avance">
+            <div class="no-print section-head">
+              <div class="section-title">Avance de ventas · <span class="vCorteInline">—</span></div>
+              <div class="export-group">
+                <button class="export-btn" data-vprint="vPrint-avance">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                  Descargar PDF
+                </button>
+                <button class="export-btn" id="vExportAvance">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                  Descargar Excel
+                </button>
+              </div>
+            </div>
+            <div class="no-print toolbar">
+              <div class="v-cats" id="vCats"></div>
+              <div class="v-meta">
+                <div class="umbral-box">
+                  <label for="vMeta">meta</label>
+                  <input type="number" id="vMeta" value="100" min="1" max="200" step="1">
+                  <span>%</span>
+                </div>
+                <button class="v-meta-save" id="vMetaGuardar" style="display:none;">Guardar meta</button>
+              </div>
+            </div>
+            <div class="no-print v-meta-info" id="vMetaInfo"></div>
+            <div id="vPrint-avance">
+              <div class="print-title">
+                <div class="print-title-main">Avance de Ventas</div>
+                <div class="print-title-sub">Saga Trans Confitería · <span class="vCatsInline"></span> · Corte al <span class="vCorteInline">—</span></div>
+              </div>
+              <div class="kpi-grid kpi-grid-4" id="vAvanceKpis"></div>
+              <div class="card">
+                <div class="table-scroll"><table class="v-table" id="vAvanceTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+              </div>
+            </div>
+            <div class="note">Clic en un monto de Facturado para ver sus documentos. Facturado = venta neta (ventas − devoluciones), sin IGV. Proyección = % avance ÷ % de días hábiles transcurridos.</div>
+          </section>
+
+          <!-- ===== VENTAS · COBERTURA ===== -->
+          <section class="tab-panel" id="vpanel-cobertura" style="display:none;">
+            <div class="no-print section-head">
+              <div class="section-title">Cobertura · <span id="vCobCatLabel">—</span> · <span class="vCorteInline">—</span></div>
+              <div class="export-group">
+                <button class="export-btn" data-vprint="vPrint-cobertura">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                  Descargar PDF
+                </button>
+                <button class="export-btn" id="vExportCobMes">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                  Excel del mes
+                </button>
+                <button class="export-btn" id="vExportCobDia">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                  Excel del día
+                </button>
+              </div>
+            </div>
+            <div class="no-print segmented v-sub-seg" id="vCobCats" style="width:fit-content;"></div>
+            <div class="pendiente-banner no-print" id="vCobSinCartera" style="display:none;">No se encontró el archivo de Cartera de este mes. Súbelo a <b>&nbsp;ventas-data/Cartera/&nbsp;</b> para ver la cobertura de clientes.</div>
+            <div id="vPrint-cobertura" style="display:flex;flex-direction:column;gap:20px;">
+              <div class="print-title">
+                <div class="print-title-main">Análisis de Cobertura · <span class="vCobCatInline"></span></div>
+                <div class="print-title-sub">Saga Trans Confitería · Corte al <span class="vCorteInline">—</span></div>
+              </div>
+              <div class="kpi-grid kpi-grid-4" id="vCobKpis"></div>
+              <div class="v-block-title" id="vCobTitMes">Resumen del mes</div>
+              <div class="card"><div class="table-scroll"><table class="v-table" id="vCobMesTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div></div>
+              <div class="v-block-title" id="vCobTitDia">Acumulado del día</div>
+              <div class="card"><div class="table-scroll"><table class="v-table" id="vCobDiaTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div></div>
+            </div>
+            <div class="note">Clientes únicos por código + domicilio, solo de la cartera activa (cliente AC y local AC). Venta del día = clientes que compraron la categoría en la fecha de corte y no habían comprado antes en el mes. Cuota diaria = (cuota − avance hasta el día anterior) ÷ días hábiles restantes.</div>
+          </section>
+
+          <!-- ===== VENTAS · DOCUMENTOS ===== -->
+          <section class="tab-panel" id="vpanel-documentos" style="display:none;">
+            <div class="card filter-card no-print">
+              <div class="filter-row">
+                <div class="filter-field">
+                  <label for="vDocSearch">Buscar</label>
+                  <input type="text" id="vDocSearch" placeholder="Documento, código o cliente...">
+                </div>
+                <div class="filter-field">
+                  <label for="vDocVend">Vendedor</label>
+                  <select id="vDocVend"></select>
+                </div>
+                <div class="filter-field">
+                  <label for="vDocCat">Categoría</label>
+                  <select id="vDocCat"></select>
+                </div>
+                <div class="filter-field">
+                  <label>Fecha</label>
+                  <div class="range-inputs">
+                    <input type="date" id="vDocDesde">
+                    <span>–</span>
+                    <input type="date" id="vDocHasta">
+                  </div>
+                </div>
+                <button class="clear-btn" id="vDocLimpiar">Limpiar</button>
+              </div>
+            </div>
+            <div class="kpi-grid kpi-grid-4" id="vDocKpis"></div>
+            <div class="no-print doc-toolbar">
+              <div class="note" id="vDocLabel"></div>
+              <button class="export-btn" id="vExportDocs">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                Descargar Excel
+              </button>
+            </div>
+            <div class="card">
+              <div class="table-scroll"><table class="v-table" id="vDocTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+            </div>
+            <div class="doc-footer">
+              <div></div>
+              <div class="pager">
+                <button class="page-btn" id="vDocPrev">&larr;</button>
+                <span id="vDocPage"></span>
+                <button class="page-btn" id="vDocNext">&rarr;</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- ===== VENTAS · ALERTAS ===== -->
+          <section class="tab-panel" id="vpanel-alertas" style="display:none;">
+            <div class="note">Ventas a clientes que no están en la cartera activa del vendedor. No se cuentan en la cobertura: revisa si el cliente o el local fue dado de baja, o si hay un dato mal registrado. Clic en el monto para ver sus documentos.</div>
+            <div class="card">
+              <div class="table-scroll"><table class="v-table" id="vAlertasTable"><thead></thead><tbody></tbody></table></div>
+            </div>
+          </section>
+
+        </div>
+        <!-- ===== FIN MÓDULO VENTAS ===== -->
+
     </div>
   </div>
 
@@ -323,5 +510,7 @@
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="js/config.js?v=4"></script>
   <script src="js/app.js?v=37"></script>
+  <script src="js/ventas-calc.js?v=1"></script>
+  <script src="js/ventas.js?v=1"></script>
 </body>
 </html>
