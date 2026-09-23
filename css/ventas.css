@@ -1,0 +1,86 @@
+/* =====================================================================
+   Módulo Ventas — estilos propios (css/ventas.css)
+   Usa las variables y componentes de style.css (card, kpi, tab-btn,
+   export-btn, num…). Aquí solo van clases nuevas con prefijo v-.
+   ===================================================================== */
+
+/* Pestañas: mismo look que .tabbar, pero con otro nombre para que el
+   código de Rechazos (que escucha ".tabbar .tab-btn") no las capture. */
+.v-tabbar{display:flex;gap:6px;background:#FFFFFF;border:1px solid var(--card-border);border-radius:11px;padding:5px;width:fit-content;flex-wrap:wrap;box-shadow:0 1px 2px rgba(22,53,107,.04);}
+.v-tabbar .tab-btn{position:relative;}
+.v-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:var(--red);color:#FFFFFF;font-family:'IBM Plex Mono',monospace;font-size:11px;}
+.v-count.zero{background:#F0EDE5;color:var(--muted);}
+
+/* Barra de días hábiles */
+.v-infobar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+.v-habiles{display:inline-flex;align-items:center;gap:10px;height:40px;padding:0 14px;border-radius:10px;background:#FFFFFF;border:1px solid var(--card-border);font-size:13px;color:var(--muted);}
+.v-habiles b{font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--ink);font-size:14px;}
+.v-habiles .v-dot{width:8px;height:8px;border-radius:50%;background:var(--teal);}
+
+/* Calendario (solo consulta) */
+.v-cal{padding:18px 20px;}
+.v-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;max-width:620px;}
+.v-cal-hd{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;text-align:center;padding-bottom:2px;}
+.v-cal-d{height:48px;border-radius:9px;border:1px solid var(--card-border);background:#FFFFFF;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--ink);}
+.v-cal-d small{font-family:'IBM Plex Sans',sans-serif;font-size:10px;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 3px;color:inherit;}
+.v-cal-d.past{color:var(--faint);}
+.v-cal-d.off{background:#FDEEEA;border-color:#F2C9BE;color:var(--red);}
+.v-cal-d.ex-si{background:#E6F4F2;border-color:#BFE3DE;color:var(--teal);}
+.v-cal-d.corte{box-shadow:inset 0 0 0 2px var(--navy);}
+.v-cal-leg{display:flex;flex-wrap:wrap;gap:18px;font-size:12px;color:var(--muted);margin-top:12px;align-items:center;}
+.v-cal-leg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-2px;border:1px solid var(--card-border);background:#FFFFFF;}
+
+/* Toolbar de Avance: categorías + meta */
+.v-cats{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.v-cats-lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-right:4px;}
+.v-chip{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:10px;border:1px solid var(--card-border);background:#FFFFFF;font-size:14px;cursor:pointer;user-select:none;}
+.v-chip input{accent-color:var(--navy);width:15px;height:15px;margin:0;cursor:pointer;}
+.v-chip.on{border-color:var(--navy);background:#EEF2F9;color:var(--navy);font-weight:500;}
+.v-meta{display:flex;align-items:center;gap:8px;}
+.v-meta .umbral-box{border-radius:10px;height:40px;}
+.v-meta .umbral-box input{width:54px;text-align:right;font-size:14px;}
+.v-meta-save{all:unset;cursor:pointer;height:40px;padding:0 14px;border-radius:10px;background:var(--navy);color:#FFFFFF;font-size:13px;font-weight:600;}
+.v-meta-save:hover{background:#0F2547;}
+.v-meta-save:disabled{opacity:.6;cursor:default;}
+.v-meta-info{font-size:12px;color:var(--faint);min-height:16px;margin-top:-8px;}
+.v-meta-info.err{color:var(--red);}
+
+/* Subcategorías de Cobertura (usa .segmented) */
+.v-sub-seg .tab-btn{padding:8px 16px;font-size:13px;}
+
+/* Tablas */
+.v-table th.r,.v-table td.r{text-align:right;}
+.v-table th.c,.v-table td.c{text-align:center;}
+.v-table thead tr.v-grp th{text-align:center;border-bottom:1px solid var(--card-border);padding-bottom:6px;}
+.v-table thead tr.v-grp th.v-grp-sep{border-left:1px solid var(--card-border);}
+.v-table td.num.clickable span.v-link{border-bottom:1px dashed #9FB0CF;color:var(--navy);}
+.v-table td.num.clickable:hover span.v-link{border-bottom-color:var(--navy);}
+.v-table tr.v-muted td{color:var(--muted);}
+.v-table tfoot td{font-weight:600;}
+.v-ajustada{color:var(--amber);}
+.v-rk{font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--navy);font-size:15px;}
+
+/* Barras de % (mismo tamaño que .pct-bar-track de Rechazos) */
+.v-pct{display:flex;align-items:center;justify-content:flex-end;gap:10px;}
+.v-pct .pct-bar-track{width:64px;}
+.v-bar-ok{background:var(--teal);}
+.v-bar-mid{background:var(--amber);}
+.v-bar-bad{background:var(--red);}
+.v-bar-neutral{background:var(--navy);}
+
+/* Estado de proyección */
+.v-est{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap;}
+.v-est.riesgo{background:#FDEEEA;color:var(--red);}
+.v-est.atencion{background:#FBF3E4;color:#8E6620;}
+.v-est.ritmo{background:#E6F4F2;color:#177A6F;}
+
+.v-block-title{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:var(--ink);margin:4px 0 -8px;}
+.v-avisos{display:flex;flex-direction:column;gap:8px;}
+.v-aviso-err{background:#FDEEEA;border-color:#F2C9BE;color:var(--red);}
+.v-kpi-sub{font-size:12px;color:var(--faint);margin-top:4px;font-family:'IBM Plex Mono',monospace;}
+.kpi-amber{border-top-color:var(--amber);}
+
+@media (max-width:900px){
+  .v-infobar{flex-direction:column;align-items:flex-start;}
+}
+.v-avisos:empty{display:none;}
