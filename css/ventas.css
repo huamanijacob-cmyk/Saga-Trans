@@ -61,7 +61,7 @@
 .v-rk{font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--navy);font-size:15px;}
 
 /* Barras de % (mismo tamaño que .pct-bar-track de Rechazos) */
-.v-pct{display:flex;align-items:center;justify-content:flex-end;gap:10px;}
+.v-pct{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:150px;}
 .v-pct .pct-bar-track{width:64px;}
 .v-bar-ok{background:var(--teal);}
 .v-bar-mid{background:var(--amber);}
@@ -84,3 +84,14 @@
   .v-infobar{flex-direction:column;align-items:flex-start;}
 }
 .v-avisos:empty{display:none;}
+
+/* Comparativo */
+.v-chart-card{padding:18px 20px 12px;}
+.v-chart-box{position:relative;height:340px;}
+.v-chart-legend{display:flex;gap:20px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:10px;}
+.v-chart-legend span{display:inline-flex;align-items:center;gap:8px;}
+.v-chart-legend i{display:inline-block;width:22px;height:0;border-top:2.5px solid var(--navy);}
+.v-chart-legend i.prev{border-top:2.5px dashed var(--red);}
+.v-up{color:#177A6F;}
+.v-down{color:var(--red);}
+@media print{.v-chart-box{height:300px;}}
