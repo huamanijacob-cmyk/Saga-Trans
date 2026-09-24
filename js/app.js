@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 37 (un solo filtro de fecha: reutiliza el rango de Cierre de mes)');
+console.log('Panel de Rechazos — app.js version 38 (umbral propio en Por vendedor)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -38,7 +38,7 @@ const state = {
   diaSel: null,           // 'YYYY-MM-DD'
   joinFrom: null,         // 'YYYY-MM' — desde dónde buscar el chofer hacia atrás
   cond: { search: '', onlyAlerts: false, umbral: 2, sortKey: 'pct', sortDir: 'desc' },
-  vend: { search: '' },
+  vend: { search: '', onlyAlerts: false, umbral: 2 },
   doc:  { search: '', vendor: 'all', chofer: 'all', motivo: 'all', montoMin: '', montoMax: '', from: null, to: null, page: 0 },
 };
 
@@ -797,7 +797,7 @@ function renderConductor() {
     <th style="text-align:right">Venta real</th>
     <th style="text-align:right"><button data-sort="monto">Monto rech.</button></th>
     <th style="text-align:right"><button data-sort="pedidos">Pedidos</button></th>
-    <th><button data-sort="pct">% Rechazo</button></th>
+    <th style="text-align:center"><button data-sort="pct">% Rechazo</button></th>
     <th style="width:20px"></th>
   </tr>`;
   thead.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
@@ -913,6 +913,7 @@ function renderVendedor() {
     const nm = vendedorLabel(v.cod).toLowerCase();
     return !q || String(v.cod).toLowerCase().includes(q) || nm.includes(q);
   }).sort((a, b) => b.monto - a.monto);
+  if (state.vend.onlyAlerts) rows = rows.filter(v => v.pct * 100 >= state.vend.umbral);
 
   const table = document.getElementById('vend-table');
   const thead = table.querySelector('thead'), tbody = table.querySelector('tbody'), tfoot = table.querySelector('tfoot');
@@ -922,7 +923,7 @@ function renderVendedor() {
     <th style="text-align:right">Venta real</th>
     <th style="text-align:right">Monto rech.</th>
     <th style="text-align:right">Pedidos</th>
-    <th>% Rechazo</th>
+    <th style="text-align:center">% Rechazo</th>
     <th style="width:20px"></th>
   </tr>`;
 
@@ -936,7 +937,7 @@ function renderVendedor() {
     tr.appendChild(el('td', 'num muted', fmtMoney(v.ventaReal)));
     tr.appendChild(el('td', 'num rej', fmtMoney(v.monto)));
     tr.appendChild(el('td', 'num', v.pedidos));
-    tr.appendChild(pctCell(v.pct, state.cond.umbral));
+    tr.appendChild(pctCell(v.pct, state.vend.umbral));
     tr.appendChild(el('td', 'muted', '&rsaquo;'));
     tbody.appendChild(tr);
   });
@@ -948,7 +949,7 @@ function renderVendedor() {
   trT.appendChild(el('td', 'num', fmtMoney(totals.ventaReal)));
   trT.appendChild(el('td', 'num rej', fmtMoney(totals.monto)));
   trT.appendChild(el('td', 'num', totals.pedidos));
-  trT.appendChild(pctCell(totalPct, state.cond.umbral));
+  trT.appendChild(pctCell(totalPct, state.vend.umbral));
   trT.appendChild(el('td'));
   tfoot.appendChild(trT);
 
@@ -1465,6 +1466,12 @@ function wireEvents() {
   });
 
   document.getElementById('vendSearch').addEventListener('input', e => { state.vend.search = e.target.value; renderVendedor(); });
+  document.getElementById('vendUmbral').addEventListener('input', e => { state.vend.umbral = parseFloat(e.target.value) || 0; document.getElementById('vendAlertLabel').textContent = state.vend.onlyAlerts ? 'Ver todos' : `Solo alertas ≥${state.vend.umbral}%`; renderVendedor(); });
+  document.getElementById('vendAlertToggle').addEventListener('click', () => {
+    state.vend.onlyAlerts = !state.vend.onlyAlerts;
+    document.getElementById('vendAlertLabel').textContent = state.vend.onlyAlerts ? 'Ver todos' : `Solo alertas ≥${state.vend.umbral}%`;
+    renderVendedor();
+  });
 
   document.getElementById('docSearch').addEventListener('input', e => { state.doc.search = e.target.value; state.doc.page = 0; drawDocumentos(); });
   document.getElementById('docVendor').addEventListener('change', e => { state.doc.vendor = e.target.value; state.doc.page = 0; drawDocumentos(); });

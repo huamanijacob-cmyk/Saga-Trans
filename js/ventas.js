@@ -7,7 +7,7 @@
    ===================================================================== */
 (function () {
   'use strict';
-  const VERSION = 5;
+  const VERSION = 8;
   console.log('Módulo Ventas — ventas.js version ' + VERSION);
 
   // ---------------- Configuración del módulo ----------------
@@ -67,11 +67,17 @@
   const largo = f => { const [y, m, d] = f.split('/').map(Number); return `${d} de ${MES_NOMBRE[m - 1]} del ${y}`; };
   const estado = p => C.estado(p, VCFG);
   const barCls = e => ({ ritmo: 'v-bar-ok', atencion: 'v-bar-mid', riesgo: 'v-bar-bad' }[e] || 'v-bar-neutral');
+  const teorico = () => (VR.hab && VR.hab.total ? VR.hab.transcurridos / VR.hab.total : 0);
+  const fT = t => Math.round(t * 100) + '%';
 
-  function pctHtml(p, est) {
+  // % primero y la barra después. ref = contra qué se evalúa (teórico o 1 = meta).
+  // Verde ≥ ref · amarillo ≥ 85% de ref · rojo menos. Con ref < 1 se dibuja la marca del teórico.
+  function pctHtml(p, ref) {
     if (p === null || p === undefined || !isFinite(p)) return '<span class="pct-num">—</span>';
     const w = Math.max(0, Math.min(p, 1)) * 100;
-    return `<div class="v-pct"><div class="pct-bar-track"><div class="pct-bar ${barCls(est)}" style="width:${w}%"></div></div><span class="pct-num">${fP(p)}</span></div>`;
+    const cls = ref ? barCls(estado(p / ref)) : 'v-bar-neutral';
+    const marca = ref && ref < 1 ? `<i class="v-marca" style="left:${ref * 100}%"></i>` : '';
+    return `<div class="v-pct"><span class="pct-num">${fP(p)}</span><div class="pct-bar-track v-track"><div class="pct-bar ${cls}" style="width:${w}%"></div>${marca}</div></div>`;
   }
   const estHtml = e => (e ? `<span class="v-est ${e}">${EST_LABEL[e]}</span>` : '');
   function linkTd(txt, data) {
@@ -235,7 +241,7 @@
     const h = VR.hab;
     const ex = h.dias.filter(d => d.excepcion);
     const exTxt = ex.length ? ` · ${ex.length} día${ex.length > 1 ? 's' : ''} del calendario` : '';
-    $('vHabiles').innerHTML = `<span class="v-dot"></span>Días hábiles: <b>${h.transcurridos}</b> de <b>${h.total}</b> · restan <b>${h.restantes}</b>${exTxt}`;
+    $('vHabiles').innerHTML = `<span class="v-dot"></span>Teórico: <b>${fT(teorico())}</b> · <b>${h.transcurridos}</b> de <b>${h.total}</b> días hábiles · restan <b>${h.restantes}</b>${exTxt}`;
     const [y, m] = VD.ym.split('-').map(Number);
     const first = (new Date(y, m - 1, 1).getDay() + 6) % 7;
     let html = '<div class="v-cal-grid">' + ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => `<div class="v-cal-hd">${d}</div>`).join('') + '<div></div>'.repeat(first);
@@ -278,22 +284,22 @@
     const ag = C.avanceGeneral({ ventas: VD.ventas, cuotas: VD.cuotas, corte: vs.corte, hab: VR.hab, cats, meta: vs.meta, cfg: VCFG });
     VR.avance = ag;
     const T = ag.total, desde = vs.corte.slice(0, 8) + '01', catNames = cats.map(c => CAT[c].nombre).join(' + ');
-    const pctDias = VR.hab.total ? VR.hab.transcurridos / VR.hab.total : 0;
+    const T0 = teorico();
     $('vAvanceKpis').innerHTML =
       kpi('navy', 'Cuota', fS(T.cuota), Math.round(vs.meta * 100) !== 100 ? `100% ${fS(T.cuota100)} · meta ${Math.round(vs.meta * 100)}%` : catNames) +
       kpi('teal', 'Facturado', fS(T.facturado), 'venta neta sin IGV') +
-      kpi('navy', '% Avance', fP(T.pct), `días transcurridos ${fP(pctDias)}`) +
+      kpi('navy', '% Avance', fP(T.pct), `teórico ${fT(T0)}`) +
       kpi(T.estado === 'ritmo' ? 'teal' : T.estado === 'atencion' ? 'amber' : 'red', 'Proyección de cierre', fP(T.proy), EST_LABEL[T.estado] || '');
     tb.querySelector('thead').innerHTML = '<tr><th class="c">Código</th><th>Vendedor</th><th class="r">Cuota</th><th class="r">Facturado</th><th class="c">% Avance</th><th class="c">Proyección</th><th class="c">Estado</th><th class="c">Ranking</th></tr>';
     tb.querySelector('tbody').innerHTML = ag.filas.map(f => `<tr class="${f.sinRanking ? 'v-muted' : ''}">
       <td class="mono c">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
       <td class="num">${cuotaHtml(f.cuota, f.cuota100)}</td>
       ${linkTd(fS(f.facturado), { v: f.vendedor, cats: cats.join(','), desde, hasta: vs.corte })}
-      <td class="num">${pctHtml(f.pct, f.estado)}</td><td class="num">${pctHtml(f.proy, f.estado)}</td>
+      <td class="num">${pctHtml(f.pct, T0)}</td><td class="num">${pctHtml(f.proy, 1)}</td>
       <td class="c">${estHtml(f.estado)}</td><td class="c v-rk">${f.ranking || ''}</td></tr>`).join('');
     tb.querySelector('tfoot').innerHTML = `<tr><td></td><td>Saga Trans Confitería</td><td class="num">${cuotaHtml(T.cuota, T.cuota100)}</td>
       ${linkTd(fS(T.facturado), { v: '', cats: cats.join(','), desde, hasta: vs.corte })}
-      <td class="num">${pctHtml(T.pct, T.estado)}</td><td class="num">${pctHtml(T.proy, T.estado)}</td><td class="c">${estHtml(T.estado)}</td><td></td></tr>`;
+      <td class="num">${pctHtml(T.pct, T0)}</td><td class="num">${pctHtml(T.proy, 1)}</td><td class="c">${estHtml(T.estado)}</td><td></td></tr>`;
   }
 
   function renderCobertura() {
@@ -306,35 +312,34 @@
     const cb = C.cobertura({ ventas: VD.ventas, cuotas: VD.cuotas, cartera, corte: vs.corte, hab: VR.hab, cat: cat.codigo, meta: vs.meta, cfg: VCFG });
     VR.cobertura = cb;
     const M = cb.total.mes, D = cb.total.dia, desde = vs.corte.slice(0, 8) + '01';
-    const factor = VR.hab.total ? VR.hab.transcurridos / VR.hab.total : 0;
-    const estMes = p => (p === null || !factor ? null : estado(p / factor));
+    const T0 = teorico();
     $('vCobKpis').innerHTML =
       kpi('navy', 'Clientes en cartera', fN(M.clientes), 'cliente AC y local AC') +
-      kpi('teal', `Con venta de ${cat.nombre}`, fN(M.conVenta), `cobertura ${fP(M.pctCob)}`) +
+      kpi('teal', `Con venta de ${cat.nombre}`, fN(M.conVenta), `cobertura ${fP(M.pctCob)} · teórico ${fT(T0)}`) +
       kpi('navy', 'Avance del mes', fS(M.avance), `${fP(M.pct)} de ${fS(M.cuota)}`) +
-      kpi('red', `Venta del ${fD(vs.corte).slice(0, 5)}`, fS(D.avance), `${fN(D.nuevos)} clientes nuevos · ${fP(D.pct)} de la cuota diaria`);
+      kpi('red', `Venta del ${fD(vs.corte).slice(0, 5)}`, fS(D.avance), `${fN(D.nuevos)} de ${fN(D.pendientes)} pendientes · ${fP(D.pct)} de la cuota diaria`);
     $('vCobTitMes').textContent = `Resumen del mes · acumulado al ${largo(vs.corte)}`;
     $('vCobTitDia').textContent = `Acumulado del día · ${largo(vs.corte)} · restan ${VR.hab.restantes} días hábiles`;
-    const head = (c1, c2, s1) => `<tr class="v-grp"><th></th><th></th><th colspan="2" class="v-grp-sep">Cliente</th><th class="v-grp-sep"></th><th colspan="2" class="v-grp-sep">Soles</th><th class="v-grp-sep"></th></tr>
-      <tr><th class="c">Código</th><th>Vendedor</th><th class="c">${c1}</th><th class="c">${c2}</th><th class="c">% Cobertura</th><th class="r">${s1}</th><th class="r">Avance</th><th class="c">% Avance</th></tr>`;
+    const head = (c1, c2, s1, extra) => `<tr class="v-grp"><th></th><th></th><th colspan="${extra ? 3 : 2}" class="v-grp-sep">Cliente</th><th class="v-grp-sep"></th><th colspan="2" class="v-grp-sep">Soles</th><th class="v-grp-sep"></th></tr>
+      <tr><th class="c">Código</th><th>Vendedor</th><th class="c">${c1}</th>${extra ? `<th class="c">${extra}</th>` : ''}<th class="c">${c2}</th><th class="c">% Cobertura</th><th class="r">${s1}</th><th class="r">Avance</th><th class="c">% Avance</th></tr>`;
     const tm = $('vCobMesTable'), td = $('vCobDiaTable');
     tm.querySelector('thead').innerHTML = head('Totales', `Venta ${cat.nombre}`, 'Cuota');
     td.querySelector('thead').innerHTML = head('Pendientes', `Venta ${cat.nombre}`, 'Cuota diaria');
     tm.querySelector('tbody').innerHTML = cb.filas.map(f => `<tr><td class="mono c">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
-      <td class="num c">${fN(f.mes.clientes)}</td><td class="num c">${fN(f.mes.conVenta)}</td><td class="num">${pctHtml(f.mes.pctCob)}</td>
+      <td class="num c">${fN(f.mes.clientes)}</td><td class="num c">${fN(f.mes.conVenta)}</td><td class="num">${pctHtml(f.mes.pctCob, T0)}</td>
       <td class="num">${cuotaHtml(f.mes.cuota, f.mes.cuota100)}</td>${linkTd(fS(f.mes.avance), { v: f.vendedor, cats: cat.codigo, desde, hasta: vs.corte })}
-      <td class="num">${pctHtml(f.mes.pct, estMes(f.mes.pct))}</td></tr>`).join('');
-    tm.querySelector('tfoot').innerHTML = `<tr><td></td><td>Total</td><td class="num c">${fN(M.clientes)}</td><td class="num c">${fN(M.conVenta)}</td><td class="num">${pctHtml(M.pctCob)}</td>
-      <td class="num">${cuotaHtml(M.cuota, M.cuota100)}</td><td class="num">${fS(M.avance)}</td><td class="num">${pctHtml(M.pct, estMes(M.pct))}</td></tr>`;
+      <td class="num">${pctHtml(f.mes.pct, T0)}</td></tr>`).join('');
+    tm.querySelector('tfoot').innerHTML = `<tr><td></td><td>Total</td><td class="num c">${fN(M.clientes)}</td><td class="num c">${fN(M.conVenta)}</td><td class="num">${pctHtml(M.pctCob, T0)}</td>
+      <td class="num">${cuotaHtml(M.cuota, M.cuota100)}</td><td class="num">${fS(M.avance)}</td><td class="num">${pctHtml(M.pct, T0)}</td></tr>`;
     td.querySelector('tbody').innerHTML = cb.filas.map(f => {
       const cd = f.dia.cuotaDiaria === null ? '—' : fS(f.dia.cuotaDiaria);
       return `<tr><td class="mono c">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
-      <td class="num c">${fN(f.dia.pendientes)}</td><td class="num c">${fN(f.dia.nuevos)}</td><td class="num">${pctHtml(f.dia.pctCob)}</td>
+      <td class="num c">${fN(f.dia.pendientes)}</td><td class="num c">${fN(f.dia.nuevos)}</td><td class="num">${pctHtml(f.dia.pctCob, 1)}</td>
       <td class="num">${cd}</td>${linkTd(fS(f.dia.avance), { v: f.vendedor, cats: cat.codigo, desde: vs.corte, hasta: vs.corte })}
-      <td class="num">${pctHtml(f.dia.pct, f.dia.pct === null ? null : estado(f.dia.pct))}</td></tr>`;
+      <td class="num">${pctHtml(f.dia.pct, 1)}</td></tr>`;
     }).join('');
-    td.querySelector('tfoot').innerHTML = `<tr><td></td><td>Total</td><td class="num c">${fN(D.pendientes)}</td><td class="num c">${fN(D.nuevos)}</td><td class="num">${pctHtml(D.pctCob)}</td>
-      <td class="num">${D.cuotaDiaria === null ? '—' : fS(D.cuotaDiaria)}</td><td class="num">${fS(D.avance)}</td><td class="num">${pctHtml(D.pct, D.pct === null ? null : estado(D.pct))}</td></tr>`;
+    td.querySelector('tfoot').innerHTML = `<tr><td></td><td>Total</td><td class="num c">${fN(D.pendientes)}</td><td class="num c">${fN(D.nuevos)}</td><td class="num">${pctHtml(D.pctCob, 1)}</td>
+      <td class="num">${D.cuotaDiaria === null ? '—' : fS(D.cuotaDiaria)}</td><td class="num">${fS(D.avance)}</td><td class="num">${pctHtml(D.pct, 1)}</td></tr>`;
   }
 
   function renderAlertas() {
@@ -547,7 +552,7 @@
     downloadStyledXlsx({
       filename: `avance_ventas_${fileDate()}.xlsx`, sheetName: 'Avance general',
       title: `VENTAS SAGA TRANS · Confitería — Avance de ventas (${cats})`,
-      subtitle: `Corte al ${largo(vs.corte)} · días hábiles ${VR.hab.transcurridos} de ${VR.hab.total}${metaSub()}`,
+      subtitle: `Corte al ${largo(vs.corte)} · teórico ${fT(teorico())} (${VR.hab.transcurridos} de ${VR.hab.total} días hábiles)${metaSub()}`,
       columns: [colCode('Código'), colTxt('Vendedor'), colMoney('Cuota 100%'), colMoney('Cuota'), colMoney('Facturado'), colPct('% Avance'), colPct('Proyección'), colTxt('Estado', 12), colInt('Ranking')],
       rows: ag.filas.map(f => [f.vendedor, title(f.nombre), f.cuota100, f.cuota, f.facturado, p100(f.pct), p100(f.proy), EST_LABEL[f.estado] || '', f.ranking || '']),
       totalsRow: ['', 'Saga Trans Confitería', ag.total.cuota100, ag.total.cuota, ag.total.facturado, p100(ag.total.pct), p100(ag.total.proy), EST_LABEL[ag.total.estado] || '', ''],
@@ -560,8 +565,10 @@
     downloadStyledXlsx({
       filename: `cobertura_${cat.toLowerCase()}_${dia ? 'dia' : 'mes'}_${fileDate()}.xlsx`, sheetName: dia ? 'Acumulado del día' : 'Resumen del mes',
       title: `VENTAS SAGA TRANS · Análisis de cobertura ${cat} — ${dia ? 'Acumulado del día' : 'Resumen del mes'}`,
-      subtitle: dia ? `Día ${largo(vs.corte)} · restan ${VR.hab.restantes} días hábiles${metaSub()}` : `Acumulado al ${largo(vs.corte)}${metaSub()}`,
-      columns: [colCode('Código'), colTxt('Vendedor'), colInt(dia ? 'Pendientes' : 'Clientes totales'), colInt(`Venta ${cat}`), colPct('% Cobertura'), colMoney(dia ? 'Cuota diaria' : 'Cuota'), colMoney('Avance'), colPct('% Avance')],
+      subtitle: dia ? `Día ${largo(vs.corte)} · restan ${VR.hab.restantes} días hábiles${metaSub()}` : `Acumulado al ${largo(vs.corte)} · teórico ${fT(teorico())}${metaSub()}`,
+      columns: dia
+        ? [colCode('Código'), colTxt('Vendedor'), colInt('Pendientes'), colInt(`Venta ${cat}`), colPct('% Cobertura'), colMoney('Cuota diaria'), colMoney('Avance'), colPct('% Avance')]
+        : [colCode('Código'), colTxt('Vendedor'), colInt('Clientes totales'), colInt(`Venta ${cat}`), colPct('% Cobertura'), colMoney('Cuota'), colMoney('Avance'), colPct('% Avance')],
       rows: cb.filas.map(f => dia
         ? [f.vendedor, title(f.nombre), f.dia.pendientes, f.dia.nuevos, p100(f.dia.pctCob), f.dia.cuotaDiaria ?? '', f.dia.avance, p100(f.dia.pct)]
         : [f.vendedor, title(f.nombre), f.mes.clientes, f.mes.conVenta, p100(f.mes.pctCob), f.mes.cuota, f.mes.avance, p100(f.mes.pct)]),

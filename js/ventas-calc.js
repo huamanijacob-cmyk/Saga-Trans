@@ -5,7 +5,7 @@
 // =====================================================================
 (function (root) {
   'use strict';
-  if (typeof console !== 'undefined') console.log('Módulo Ventas — ventas-calc.js version 4 (cobertura: neto > 0)');
+  if (typeof console !== 'undefined') console.log('Módulo Ventas — ventas-calc.js version 6 (neto > 0 · meta del día = pendientes)');
 
   // ---------------- Saneo de datos crudos ----------------
   // Quita \r\n, espacios y convierte a texto. NUNCA usar !!valor para
@@ -266,6 +266,7 @@
           cuota100: q100, cuota: q, avance: c.mes, pct: div(c.mes, q),
         },
         dia: {
+          // Meta de clientes del día = los pendientes. % cobertura del día = venta ÷ pendientes.
           pendientes, nuevos: nuevosHoy.length, pctCob: div(nuevosHoy.length, pendientes),
           cuotaDiaria, cuotaCumplida, avance: c.hoy,
           pct: cuotaDiaria ? c.hoy / cuotaDiaria : null,
