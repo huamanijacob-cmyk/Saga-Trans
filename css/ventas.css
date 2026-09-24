@@ -61,10 +61,14 @@
 .v-rk{font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--navy);font-size:15px;}
 
 /* Barras de % (mismo tamaño que .pct-bar-track de Rechazos) */
-.v-pct{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:150px;}
-.v-pct .pct-bar-track{width:64px;}
-.v-bar-ok{background:var(--teal);}
-.v-bar-mid{background:var(--amber);}
+.v-pct{display:flex;align-items:center;justify-content:center;gap:8px;}
+.v-track{position:relative;overflow:visible;}
+.v-track .pct-bar{border-radius:4px;}
+.v-marca{position:absolute;top:-3px;width:2px;height:12px;margin-left:-1px;background:var(--ink);border-radius:1px;}
+.v-pct .pct-bar-track{width:48px;}
+.v-pct .pct-num{min-width:48px;}
+.v-bar-ok{background:#2F8F4E;}
+.v-bar-mid{background:#D39B2A;}
 .v-bar-bad{background:var(--red);}
 .v-bar-neutral{background:var(--navy);}
 
@@ -72,7 +76,7 @@
 .v-est{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap;}
 .v-est.riesgo{background:#FDEEEA;color:var(--red);}
 .v-est.atencion{background:#FBF3E4;color:#8E6620;}
-.v-est.ritmo{background:#E6F4F2;color:#177A6F;}
+.v-est.ritmo{background:#E5F2E9;color:#2F8F4E;}
 
 .v-block-title{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:var(--ink);margin:4px 0 -8px;}
 .v-avisos{display:flex;flex-direction:column;gap:8px;}
@@ -95,3 +99,4 @@
 .v-up{color:#177A6F;}
 .v-down{color:var(--red);}
 @media print{.v-chart-box{height:300px;}}
+.v-table td:nth-child(2){white-space:nowrap;}

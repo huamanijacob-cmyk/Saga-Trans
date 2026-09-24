@@ -233,8 +233,8 @@ tfoot tr{background:#F5F3ED;font-weight:600;}
 th button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
 th button:hover{color:var(--red);}
 
-.pct-cell{display:flex;align-items:center;justify-content:space-between;gap:10px;}
-.pct-bar-track{width:70px;flex:none;height:6px;border-radius:4px;background:#F0EDE5;overflow:hidden;}
+.pct-cell{display:flex;flex-direction:row-reverse;align-items:center;justify-content:center;gap:8px;}
+.pct-bar-track{width:48px;flex:none;height:6px;border-radius:4px;background:#F0EDE5;overflow:hidden;}
 .motivo-input{
   display:block;width:100%;box-sizing:border-box;font-size:13px;color:var(--ink);padding:6px 8px;
   border-radius:6px;border:1px solid var(--card-border);background:#FFFFFF;margin-top:6px;
