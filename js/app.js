@@ -868,7 +868,8 @@ function pctCell(pct, umbral) {
   const wrap = el('div', 'pct-cell');
   const track = el('div', 'pct-bar-track');
   const bar = el('div', `pct-bar ${pctLevel(pct, umbral)}`);
-  bar.style.width = Math.min(100, Math.round(pct * 100 * 3)) + '%';
+  // La barra se llena respecto del umbral: umbral = barra llena (crítico).
+  bar.style.width = (umbral > 0 ? Math.min(100, Math.round(pct * 100 / umbral * 100)) : 0) + '%';
   track.appendChild(bar);
   wrap.appendChild(track);
   wrap.appendChild(el('span', 'pct-num', fmtPct(pct)));

@@ -296,9 +296,9 @@
     const T0 = teorico();
     $('vAvanceKpis').innerHTML =
       kpi('navy', 'Cuota', fS(T.cuota), Math.round(vs.meta * 100) !== 100 ? `100% ${fS(T.cuota100)} · meta ${Math.round(vs.meta * 100)}%` : catNames) +
-      kpi('teal', 'Avance', fS(T.facturado), 'venta neta sin IGV') +
-      kpi('navy', '% Avance', fP(T.pct), `teórico ${fT(T0)}`) +
-      kpi(T.estado === 'ritmo' ? 'green' : T.estado === 'atencion' ? 'amber' : 'red', 'Proyección de cierre', fP(T.proy), EST_LABEL[T.estado] || '');
+      kpi('teal', 'Avance', fS(T.facturado)) +
+      kpi('navy', '% Avance', fP(T.pct)) +
+      kpi(T.estado === 'ritmo' ? 'green' : T.estado === 'atencion' ? 'amber' : 'red', 'Proyección de cierre', fP(T.proy));
     tb.querySelector('thead').innerHTML = '<tr><th class="c">Código</th><th>Vendedor</th><th class="r">Cuota</th><th class="r">Avance</th><th class="c">% Avance</th><th class="c">Proyección</th><th class="c">Estado</th><th class="c">Ranking</th></tr>';
     tb.querySelector('tbody').innerHTML = ag.filas.map(f => `<tr class="${f.sinRanking ? 'v-muted' : ''}">
       <td class="mono c">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
@@ -323,10 +323,10 @@
     const M = cb.total.mes, D = cb.total.dia, desde = vs.corte.slice(0, 8) + '01';
     const T0 = teorico();
     $('vCobKpis').innerHTML =
-      kpi('navy', 'Clientes en cartera', fN(M.clientes), 'cliente AC y local AC') +
-      kpi('teal', `Con venta de ${cat.nombre}`, fN(M.conVenta), `cobertura ${fP(M.pctCob)} · teórico ${fT(T0)}`) +
-      kpi('navy', 'Avance del mes', fS(M.avance), `${fP(M.pct)} de ${fS(M.cuota)}`) +
-      kpi('red', `Venta del ${fD(vs.corte).slice(0, 5)}`, fS(D.avance), `${fN(D.nuevos)} de ${fN(D.pendientes)} pendientes · ${fP(D.pct)} de la cuota diaria`);
+      kpi('navy', 'Clientes en cartera', fN(M.clientes)) +
+      kpi('teal', `Con venta de ${cat.nombre}`, fN(M.conVenta)) +
+      kpi('navy', 'Avance del mes', fS(M.avance)) +
+      kpi('red', `Venta del ${fD(vs.corte).slice(0, 5)}`, fS(D.avance));
     $('vCobTitMes').textContent = `Resumen del mes · acumulado al ${largo(vs.corte)}`;
     $('vCobTitDia').textContent = `Acumulado del día · ${largo(vs.corte)} · restan ${VR.hab.restantes} días hábiles`;
     const head = (c1, c2, s1, extra) => `<tr class="v-grp"><th></th><th></th><th colspan="${extra ? 3 : 2}" class="v-grp-sep">Cliente</th><th class="v-grp-sep"></th><th colspan="2" class="v-grp-sep">Soles</th><th class="v-grp-sep"></th></tr>
