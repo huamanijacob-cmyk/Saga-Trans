@@ -358,7 +358,7 @@
           </div>
 
           <div class="no-print v-infobar">
-            <div class="v-habiles" id="vHabiles"><span class="v-dot"></span>Días hábiles: —</div>
+            <div class="v-dias" id="vHabiles"></div>
             <div class="export-group">
               <button class="export-btn" id="vBtnCalendario" aria-expanded="false">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
@@ -463,6 +463,10 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
                   Descargar PDF
                 </button>
+                <button class="export-btn" id="vExportCmpImg">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                  Descargar gráfico
+                </button>
                 <button class="export-btn" id="vExportCmp">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
                   Descargar Excel
@@ -497,7 +501,7 @@
 
           <!-- ===== VENTAS · DOCUMENTOS ===== -->
           <section class="tab-panel" id="vpanel-documentos" style="display:none;">
-            <div class="card filter-card no-print">
+            <div class="card filter-card no-print" id="vDocFiltros">
               <div class="filter-row">
                 <div class="filter-field">
                   <label for="vDocSearch">Buscar</label>
@@ -522,9 +526,10 @@
                 <button class="clear-btn" id="vDocLimpiar">Limpiar</button>
               </div>
             </div>
+            <div class="pendiente-banner v-ext" id="vDocExt" style="display:none;"></div>
             <div class="kpi-grid kpi-grid-4" id="vDocKpis"></div>
             <div class="no-print doc-toolbar">
-              <div class="note" id="vDocLabel"></div>
+              <div class="note" id="vDocLabel" style="display:none;"></div><div></div>
               <button class="export-btn" id="vExportDocs">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
                 Descargar Excel
