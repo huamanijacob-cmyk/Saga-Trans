@@ -5,6 +5,7 @@
 // =====================================================================
 (function (root) {
   'use strict';
+  if (typeof console !== 'undefined') console.log('Módulo Ventas — ventas-calc.js version 4 (cobertura: neto > 0)');
 
   // ---------------- Saneo de datos crudos ----------------
   // Quita \r\n, espacios y convierte a texto. NUNCA usar !!valor para
@@ -221,23 +222,29 @@
   // ---------------- 2. Cobertura por categoría ----------------
   function cobertura({ ventas, cuotas, cartera, corte, hab, cat, meta, cfg }) {
     const { idx, nombres } = indexar(ventas, corte, [cat]);
-    // Clientes con venta 'V' de la categoría, separados en antes del corte y el día del corte.
-    const antes = {}, hoy = {};
+    // Regla de cobertura: NETO > 0. Un cliente está cubierto si (ventas − devoluciones)
+    // de la categoría, acumulado hasta la fecha, es mayor que cero. Si le devolvieron todo, no cuenta.
+    // netoAntes = hasta el día anterior al corte · netoMes = hasta el corte (incluido).
+    const netoAntes = {}, netoMes = {};
     ventas.forEach(r => {
-      if (r.cat !== cat || r.vtadvo !== 'V' || !r.fecha || r.fecha > corte) return;
-      const bucket = r.fecha < corte ? antes : hoy;
-      (bucket[r.vendedor] = bucket[r.vendedor] || new Set()).add(r.cli);
+      if (r.cat !== cat || !r.fecha || r.fecha > corte) return;
+      const vm = (netoMes[r.vendedor] = netoMes[r.vendedor] || {});
+      vm[r.cli] = (vm[r.cli] || 0) + r.soles;
+      if (r.fecha < corte) {
+        const va = (netoAntes[r.vendedor] = netoAntes[r.vendedor] || {});
+        va[r.cli] = (va[r.cli] || 0) + r.soles;
+      }
     });
+    const positivos = m => new Set(Object.keys(m || {}).filter(k => m[k] > 0.01));
     const vends = new Set([...Object.keys(cuotas), ...Object.keys(cartera.activosPorVend)]);
     const filas = [];
     [...vends].sort().forEach(v => {
       if (cfg.VENDEDORES_SIN_RANKING.includes(v)) return;
       const cart = cartera.activosPorVend[v] || new Set();
-      const enCart = s => [...(s || [])].filter(k => cart.has(k));
-      const cubAntes = new Set(enCart(antes[v]));
-      const cubHoy = enCart(hoy[v]);
-      const nuevosHoy = cubHoy.filter(k => !cubAntes.has(k));
-      const cubMes = new Set([...cubAntes, ...cubHoy]);
+      const enCart = s => new Set([...s].filter(k => cart.has(k)));
+      const cubAntes = enCart(positivos(netoAntes[v]));   // cubiertos hasta ayer
+      const cubMes = enCart(positivos(netoMes[v]));       // cubiertos hasta el corte
+      const nuevosHoy = [...cubMes].filter(k => !cubAntes.has(k));
       const q = ((cuotas[v] && cuotas[v].porCat[cat]) || 0) * meta;
       const q100 = (cuotas[v] && cuotas[v].porCat[cat]) || 0;
       const c = (idx[v] && idx[v][cat]) || { mes: 0, antes: 0, hoy: 0 };
