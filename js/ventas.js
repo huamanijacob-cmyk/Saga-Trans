@@ -7,7 +7,7 @@
    ===================================================================== */
 (function () {
   'use strict';
-  const VERSION = 1;
+  const VERSION = 5;
   console.log('Módulo Ventas — ventas.js version ' + VERSION);
 
   // ---------------- Configuración del módulo ----------------
@@ -43,7 +43,10 @@
     cats: new Set(VCFG.CATEGORIAS_AVANCE_DEFAULT), catCob: ALL_CATS[0],
     meta: 1, metaGuardada: 1, metaRegistro: null,
     doc: { buscar: '', vend: 'all', cat: 'all', cats: null, desde: '', hasta: '', page: 0 },
+    cmp: { cats: new Set(VCFG.CATEGORIAS_AVANCE_DEFAULT), vista: 'acum' },   // siempre toda la empresa
   };
+  const PREVIO = {};   // ym → ventas parseadas del mismo mes del año anterior (o null si no existe)
+  let CMP_CHART = null;
   let VD = null;   // datos del mes cargado
   let VR = {};     // últimos resultados calculados
   window.VENTAS = { state: vs, get data() { return VD; }, get res() { return VR; }, config: VCFG };
@@ -127,6 +130,11 @@
     overlay(true, 'Cargando ventas...');
     $('vAvisos').innerHTML = '';
     if (forzar && typeof FILE_CACHE !== 'undefined') delete FILE_CACHE[`${VCFG.VENTAS_FOLDER}/${VCFG.VENTAS_PREFIX}_${ym}.xlsx`];
+    if (forzar) {
+      const py = `${+ym.slice(0, 4) - 1}${ym.slice(4)}`;
+      delete PREVIO[py];
+      if (typeof FILE_CACHE !== 'undefined') delete FILE_CACHE[`${VCFG.VENTAS_FOLDER}/${VCFG.VENTAS_PREFIX}_${py}.xlsx`];
+    }
     const year = ym.slice(0, 4);
     const intento = async (fn, nombre) => {
       try { return await fn(); } catch (e) { console.error(nombre, e); aviso(`No se pudo leer <b>&nbsp;${esc(nombre)}&nbsp;</b>: ${esc(e.message)}`, true); return null; }
@@ -220,6 +228,7 @@
     renderCobertura();
     renderAlertas();
     renderDocs();
+    if (vs.tab === 'comparativo') renderCmp();
   }
 
   function renderHabiles() {
@@ -275,9 +284,9 @@
       kpi('teal', 'Facturado', fS(T.facturado), 'venta neta sin IGV') +
       kpi('navy', '% Avance', fP(T.pct), `días transcurridos ${fP(pctDias)}`) +
       kpi(T.estado === 'ritmo' ? 'teal' : T.estado === 'atencion' ? 'amber' : 'red', 'Proyección de cierre', fP(T.proy), EST_LABEL[T.estado] || '');
-    tb.querySelector('thead').innerHTML = '<tr><th>Código</th><th>Vendedor</th><th class="r">Cuota</th><th class="r">Facturado</th><th class="r">% Avance</th><th class="r">Proyección</th><th class="c">Estado</th><th class="c">Ranking</th></tr>';
+    tb.querySelector('thead').innerHTML = '<tr><th class="c">Código</th><th>Vendedor</th><th class="r">Cuota</th><th class="r">Facturado</th><th class="c">% Avance</th><th class="c">Proyección</th><th class="c">Estado</th><th class="c">Ranking</th></tr>';
     tb.querySelector('tbody').innerHTML = ag.filas.map(f => `<tr class="${f.sinRanking ? 'v-muted' : ''}">
-      <td class="mono">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
+      <td class="mono c">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
       <td class="num">${cuotaHtml(f.cuota, f.cuota100)}</td>
       ${linkTd(fS(f.facturado), { v: f.vendedor, cats: cats.join(','), desde, hasta: vs.corte })}
       <td class="num">${pctHtml(f.pct, f.estado)}</td><td class="num">${pctHtml(f.proy, f.estado)}</td>
@@ -307,37 +316,37 @@
     $('vCobTitMes').textContent = `Resumen del mes · acumulado al ${largo(vs.corte)}`;
     $('vCobTitDia').textContent = `Acumulado del día · ${largo(vs.corte)} · restan ${VR.hab.restantes} días hábiles`;
     const head = (c1, c2, s1) => `<tr class="v-grp"><th></th><th></th><th colspan="2" class="v-grp-sep">Cliente</th><th class="v-grp-sep"></th><th colspan="2" class="v-grp-sep">Soles</th><th class="v-grp-sep"></th></tr>
-      <tr><th>Código</th><th>Vendedor</th><th class="r">${c1}</th><th class="r">${c2}</th><th class="r">% Cobertura</th><th class="r">${s1}</th><th class="r">Avance</th><th class="r">% Avance</th></tr>`;
+      <tr><th class="c">Código</th><th>Vendedor</th><th class="c">${c1}</th><th class="c">${c2}</th><th class="c">% Cobertura</th><th class="r">${s1}</th><th class="r">Avance</th><th class="c">% Avance</th></tr>`;
     const tm = $('vCobMesTable'), td = $('vCobDiaTable');
     tm.querySelector('thead').innerHTML = head('Totales', `Venta ${cat.nombre}`, 'Cuota');
     td.querySelector('thead').innerHTML = head('Pendientes', `Venta ${cat.nombre}`, 'Cuota diaria');
-    tm.querySelector('tbody').innerHTML = cb.filas.map(f => `<tr><td class="mono">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
-      <td class="num">${fN(f.mes.clientes)}</td><td class="num">${fN(f.mes.conVenta)}</td><td class="num">${pctHtml(f.mes.pctCob)}</td>
+    tm.querySelector('tbody').innerHTML = cb.filas.map(f => `<tr><td class="mono c">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
+      <td class="num c">${fN(f.mes.clientes)}</td><td class="num c">${fN(f.mes.conVenta)}</td><td class="num">${pctHtml(f.mes.pctCob)}</td>
       <td class="num">${cuotaHtml(f.mes.cuota, f.mes.cuota100)}</td>${linkTd(fS(f.mes.avance), { v: f.vendedor, cats: cat.codigo, desde, hasta: vs.corte })}
       <td class="num">${pctHtml(f.mes.pct, estMes(f.mes.pct))}</td></tr>`).join('');
-    tm.querySelector('tfoot').innerHTML = `<tr><td></td><td>Total</td><td class="num">${fN(M.clientes)}</td><td class="num">${fN(M.conVenta)}</td><td class="num">${pctHtml(M.pctCob)}</td>
+    tm.querySelector('tfoot').innerHTML = `<tr><td></td><td>Total</td><td class="num c">${fN(M.clientes)}</td><td class="num c">${fN(M.conVenta)}</td><td class="num">${pctHtml(M.pctCob)}</td>
       <td class="num">${cuotaHtml(M.cuota, M.cuota100)}</td><td class="num">${fS(M.avance)}</td><td class="num">${pctHtml(M.pct, estMes(M.pct))}</td></tr>`;
     td.querySelector('tbody').innerHTML = cb.filas.map(f => {
-      const cd = f.dia.cuotaDiaria === null ? 'Cierre de mes' : (f.dia.cuotaCumplida ? 'Cumplida' : fS(f.dia.cuotaDiaria));
-      return `<tr><td class="mono">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
-      <td class="num">${fN(f.dia.pendientes)}</td><td class="num">${fN(f.dia.nuevos)}</td><td class="num">${pctHtml(f.dia.pctCob)}</td>
+      const cd = f.dia.cuotaDiaria === null ? '—' : fS(f.dia.cuotaDiaria);
+      return `<tr><td class="mono c">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
+      <td class="num c">${fN(f.dia.pendientes)}</td><td class="num c">${fN(f.dia.nuevos)}</td><td class="num">${pctHtml(f.dia.pctCob)}</td>
       <td class="num">${cd}</td>${linkTd(fS(f.dia.avance), { v: f.vendedor, cats: cat.codigo, desde: vs.corte, hasta: vs.corte })}
       <td class="num">${pctHtml(f.dia.pct, f.dia.pct === null ? null : estado(f.dia.pct))}</td></tr>`;
     }).join('');
-    td.querySelector('tfoot').innerHTML = `<tr><td></td><td>Total</td><td class="num">${fN(D.pendientes)}</td><td class="num">${fN(D.nuevos)}</td><td class="num">${pctHtml(D.pctCob)}</td>
+    td.querySelector('tfoot').innerHTML = `<tr><td></td><td>Total</td><td class="num c">${fN(D.pendientes)}</td><td class="num c">${fN(D.nuevos)}</td><td class="num">${pctHtml(D.pctCob)}</td>
       <td class="num">${D.cuotaDiaria === null ? '—' : fS(D.cuotaDiaria)}</td><td class="num">${fS(D.avance)}</td><td class="num">${pctHtml(D.pct, D.pct === null ? null : estado(D.pct))}</td></tr>`;
   }
 
   function renderAlertas() {
     const tb = $('vAlertasTable'), badge = $('vAlertasCount');
     const setBadge = n => { badge.textContent = n; badge.classList.toggle('zero', !n); };
-    tb.querySelector('thead').innerHTML = '<tr><th>Vendedor</th><th>Código cliente</th><th>Cliente</th><th>Motivo</th><th class="r">Docs</th><th class="r">Soles</th><th class="r">Última venta</th></tr>';
+    tb.querySelector('thead').innerHTML = '<tr><th>Vendedor</th><th class="c">Código cliente</th><th>Cliente</th><th>Motivo</th><th class="c">Docs</th><th class="r">Soles</th><th class="c">Última venta</th></tr>';
     if (!VD.cartera) { tb.querySelector('tbody').innerHTML = '<tr><td colspan="7" class="muted">Sin archivo de Cartera: no se pueden revisar ventas fuera de cartera.</td></tr>'; setBadge(0); return; }
     const al = C.fueraDeCartera({ ventas: VD.ventas, cartera: VD.cartera, corte: vs.corte, catCodes: ALL_CATS, cfg: VCFG });
     VR.alertas = al; setBadge(al.length);
     const desde = vs.corte.slice(0, 8) + '01';
-    tb.querySelector('tbody').innerHTML = al.length ? al.map(a => `<tr><td>${esc(a.vendedor)} · ${esc(title(a.nombreVendedor))}</td><td class="mono">${esc(a.cli)}</td><td>${esc(a.nombre)}</td><td>${esc(a.motivo)}</td>
-      <td class="num">${a.docs}</td>${linkTd(fS(a.soles), { v: a.vendedor, cats: ALL_CATS.join(','), desde, hasta: vs.corte, cli: a.cli })}<td class="num">${fD(a.ultima)}</td></tr>`).join('')
+    tb.querySelector('tbody').innerHTML = al.length ? al.map(a => `<tr><td>${esc(a.vendedor)} · ${esc(title(a.nombreVendedor))}</td><td class="mono c">${esc(a.cli)}</td><td>${esc(a.nombre)}</td><td>${esc(a.motivo)}</td>
+      <td class="num c">${a.docs}</td>${linkTd(fS(a.soles), { v: a.vendedor, cats: ALL_CATS.join(','), desde, hasta: vs.corte, cli: a.cli })}<td class="num c">${fD(a.ultima)}</td></tr>`).join('')
       : '<tr><td colspan="7" class="muted">Todas las ventas del mes son a clientes de la cartera activa.</td></tr>';
   }
 
@@ -377,9 +386,9 @@
     $('vDocPage').textContent = `${vs.doc.page + 1} / ${maxPage + 1}`;
     $('vDocPrev').disabled = vs.doc.page === 0; $('vDocNext').disabled = vs.doc.page === maxPage;
     const tb = $('vDocTable');
-    tb.querySelector('thead').innerHTML = '<tr><th>Fecha</th><th>Documento</th><th>Vendedor</th><th>Código</th><th>Cliente</th><th>Categoría</th><th class="r">Venta</th><th class="r">Devolución</th><th class="r">Neto</th></tr>';
-    tb.querySelector('tbody').innerHTML = page.length ? page.map(d => `<tr><td class="mono">${fD(d.fecha)}</td><td class="mono">${esc(d.documento)}</td><td class="mono" title="${esc(title(d.nombreVendedor))}">${esc(d.vendedor)}</td>
-      <td class="mono">${esc(d.codigo)}</td><td>${esc(d.cliente)}</td><td>${esc(title(d.cats))}</td>
+    tb.querySelector('thead').innerHTML = '<tr><th class="c">Fecha</th><th class="c">Documento</th><th class="c">Vendedor</th><th class="c">Código</th><th>Cliente</th><th>Categoría</th><th class="r">Venta</th><th class="r">Devolución</th><th class="r">Neto</th></tr>';
+    tb.querySelector('tbody').innerHTML = page.length ? page.map(d => `<tr><td class="mono c">${fD(d.fecha)}</td><td class="mono c">${esc(d.documento)}</td><td class="mono c" title="${esc(title(d.nombreVendedor))}">${esc(d.vendedor)}</td>
+      <td class="mono c">${esc(d.codigo)}</td><td>${esc(d.cliente)}</td><td>${esc(title(d.cats))}</td>
       <td class="num">${fS2(d.venta)}</td><td class="num rej">${d.devolucion ? fS2(d.devolucion) : ''}</td><td class="num">${fS2(d.neto)}</td></tr>`).join('')
       : '<tr><td colspan="9" class="muted">Sin documentos para este filtro.</td></tr>';
     tb.querySelector('tfoot').innerHTML = `<tr><td colspan="6">Total (${fN(docs.length)} documentos)</td><td class="num">${fS2(tot.venta)}</td><td class="num rej">${fS2(tot.devolucion)}</td><td class="num">${fS2(tot.neto)}</td></tr>`;
@@ -388,6 +397,122 @@
     vs.doc = { buscar: ds.cli || '', vend: ds.v || 'all', cat: 'all', cats: ds.cats ? ds.cats.split(',') : null, desde: ds.desde, hasta: ds.hasta, page: 0 };
     setTab('documentos');
     renderDocs();
+  }
+
+  // ---------------- Comparativo por día de venta ----------------
+  const DIA_ABBR = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+  const diaCorto = f => { if (!f) return ''; const [y, m, d] = f.split('/').map(Number); return `${DIA_ABBR[new Date(y, m - 1, d).getDay()]} ${pad(d)}/${pad(m)}`; };
+  const ymPrevio = ym => `${+ym.slice(0, 4) - 1}${ym.slice(4)}`;
+  const mesTxt = ym => `${MES_NOMBRE[+ym.slice(5) - 1]} ${ym.slice(0, 4)}`;
+  async function ventasPrevio(ym) {
+    const py = ymPrevio(ym);
+    if (!(py in PREVIO)) {
+      overlay(true, `Cargando ventas de ${mesTxt(py)}...`);
+      try {
+        const rows = await leerVentas(py);
+        PREVIO[py] = rows ? C.parseVentas(rows).filter(r => r.fecha.startsWith(py.replace('-', '/'))) : null;
+      } catch (e) { console.error(e); PREVIO[py] = null; }
+      finally { overlay(false); }
+    }
+    return PREVIO[py];
+  }
+  function renderCmpFiltros() {
+    $('vCmpCats').innerHTML = '<span class="v-cats-lbl">Categorías</span>' + VCFG.CATEGORIAS.map(c =>
+      `<label class="v-chip ${vs.cmp.cats.has(c.codigo) ? 'on' : ''}"><input type="checkbox" value="${c.codigo}" ${vs.cmp.cats.has(c.codigo) ? 'checked' : ''}>${c.nombre}</label>`).join('');
+    $('vCmpDiario').classList.toggle('tab-active', vs.cmp.vista === 'diario');
+    $('vCmpAcum').classList.toggle('tab-active', vs.cmp.vista === 'acum');
+  }
+  async function renderCmp() {
+    if (!VD) return;
+    renderCmpFiltros();
+    const ym = VD.ym, py = ymPrevio(ym);
+    const tituloTxt = `${mesTxt(py)} vs ${mesTxt(ym)}`;
+    $('vCmpTitulo').textContent = tituloTxt;
+    document.querySelectorAll('.vCmpTituloInline').forEach(e => { e.textContent = tituloTxt; });
+    const previo = await ventasPrevio(ym);
+    if (VD.ym !== ym) return; // cambió el mes mientras cargaba
+    const aviso2 = $('vCmpSinPrevio');
+    aviso2.style.display = previo ? 'none' : '';
+    aviso2.innerHTML = previo ? '' : `No se encontró <b>&nbsp;Ventas_${py}.xlsx&nbsp;</b> en Storage: el gráfico muestra solo ${mesTxt(ym)}.`;
+    const cats = [...vs.cmp.cats];
+    const r = C.comparativo({ actual: VD.ventas, previo: previo || [], cats, vendedor: null, corte: vs.corte });
+    VR.comparativo = r;
+    const yA = ym.slice(0, 4), yP = py.slice(0, 4);
+    const filtroTxt = cats.map(c => CAT[c].nombre).join(' + ') || 'sin categorías';
+    $('vCmpFiltroPrint').textContent = filtroTxt;
+    const n = r.nAct, v = r.variacion;
+    const vTxt = v === null ? '—' : `<span class="${v >= 0 ? 'v-up' : 'v-down'}">${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%</span>`;
+    const dif = r.prevMismoDia === null ? null : r.acumAct - r.prevMismoDia;
+    $('vCmpKpis').innerHTML =
+      kpi('navy', `${yA} · ${n} días de venta`, fS(r.acumAct), `al ${diaCorto(vs.corte)}`) +
+      kpi('red', `${yP} · mismos ${Math.min(n, r.nPrev)} días`, r.prevMismoDia === null ? '—' : fS(r.prevMismoDia), r.nPrev ? `al ${diaCorto(r.dias[Math.min(n, r.nPrev) - 1].fechaPrev)}` : 'sin datos') +
+      kpi(v === null || v >= 0 ? 'teal' : 'red', 'Variación al mismo día', vTxt, dif === null ? '' : `${dif >= 0 ? '+' : '−'}${fS(Math.abs(dif))}`) +
+      kpi('amber', `${yP} · mes completo`, r.nPrev ? fS(r.prevMes) : '—', r.nPrev ? `${r.nPrev} días de venta` : '');
+    $('vCmpLegend').innerHTML = `<span><i class="prev"></i>${title(mesTxt(py))}</span><span><i></i>${title(mesTxt(ym))}</span>`;
+    // Gráfico
+    const acum = vs.cmp.vista === 'acum';
+    const labels = r.dias.map(d => d.n);
+    const dA = r.dias.map(d => (acum ? d.acumAct : d.ventaAct));
+    const dP = r.dias.map(d => (acum ? d.acumPrev : d.ventaPrev));
+    if (typeof Chart === 'undefined') { $('vCmpLegend').innerHTML += '<span class="rej">No se pudo cargar la librería de gráficos (Chart.js).</span>'; }
+    else {
+      if (CMP_CHART) CMP_CHART.destroy();
+      CMP_CHART = new Chart($('vCmpChart'), {
+        type: 'line',
+        data: { labels, datasets: [
+          { label: yP, data: dP, borderColor: '#C1432B', backgroundColor: '#C1432B', borderDash: [6, 4], borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, tension: 0.25, spanGaps: false },
+          { label: yA, data: dA, borderColor: '#16356B', backgroundColor: '#16356B', borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, tension: 0.25, spanGaps: false },
+        ] },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: {
+              title: it => `Día de venta ${it[0].label}`,
+              label: c => {
+                const d = r.dias[c.dataIndex], prev = c.datasetIndex === 0;
+                const f = prev ? d.fechaPrev : d.fechaAct;
+                return f ? `${c.dataset.label} (${diaCorto(f)}): ${fS(c.parsed.y)}` : '';
+              },
+              afterBody: it => {
+                const d = r.dias[it[0].dataIndex];
+                const a = acum ? d.acumAct : d.ventaAct, b = acum ? d.acumPrev : d.ventaPrev;
+                return a !== null && b ? `Variación: ${a >= b ? '+' : ''}${((a / b - 1) * 100).toFixed(1)}%` : '';
+              },
+            } },
+          },
+          scales: {
+            x: { title: { display: true, text: 'Día de venta', color: '#6B675F', font: { family: 'IBM Plex Sans' } }, grid: { display: false }, ticks: { color: '#6B675F', font: { family: 'IBM Plex Mono' } } },
+            y: { grid: { color: '#F0EDE5' }, ticks: { color: '#6B675F', font: { family: 'IBM Plex Mono' }, callback: x => 'S/ ' + nf0.format(Math.round(x / 1000)) + 'k' } },
+          },
+        },
+      });
+    }
+    // Tabla
+    const tb = $('vCmpTable');
+    tb.querySelector('thead').innerHTML = `<tr class="v-grp"><th></th><th colspan="3" class="v-grp-sep">${yP}</th><th colspan="3" class="v-grp-sep">${yA}</th><th class="v-grp-sep"></th></tr>
+      <tr><th class="c">Día de venta</th><th class="c">Fecha</th><th class="r">Venta</th><th class="r">Acumulado</th><th class="c">Fecha</th><th class="r">Venta</th><th class="r">Acumulado</th><th class="c">Var. acumulado</th></tr>`;
+    const varCell = (a, b) => (a === null || !b ? '—' : `<span class="${a >= b ? 'v-up' : 'v-down'}">${a >= b ? '+' : ''}${((a / b - 1) * 100).toFixed(1)}%</span>`);
+    tb.querySelector('tbody').innerHTML = r.dias.map(d => `<tr><td class="c v-rk">${d.n}</td>
+      <td class="mono c">${diaCorto(d.fechaPrev)}</td><td class="num">${d.ventaPrev === null ? '' : fS(d.ventaPrev)}</td><td class="num">${d.acumPrev === null ? '' : fS(d.acumPrev)}</td>
+      <td class="mono c">${diaCorto(d.fechaAct)}</td><td class="num">${d.ventaAct === null ? '' : fS(d.ventaAct)}</td><td class="num">${d.acumAct === null ? '' : fS(d.acumAct)}</td>
+      <td class="num c">${varCell(d.acumAct, d.acumPrev)}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">Sin días de venta.</td></tr>';
+    tb.querySelector('tfoot').innerHTML = `<tr><td class="c">Total</td><td></td><td class="num">${r.nPrev ? fS(r.prevMes) : ''}</td><td></td><td></td><td class="num">${fS(r.acumAct)}</td><td></td>
+      <td class="num c">${varCell(r.acumAct, r.prevMismoDia)}</td></tr>`;
+  }
+  function exportCmp() {
+    const r = VR.comparativo; if (!r) return;
+    const yA = VD.ym.slice(0, 4), yP = ymPrevio(VD.ym).slice(0, 4);
+    const vr = (a, b) => (a === null || !b ? '' : (a / b - 1) * 100);
+    downloadStyledXlsx({
+      filename: `comparativo_${ymPrevio(VD.ym)}_vs_${VD.ym}.xlsx`, sheetName: 'Comparativo',
+      title: `VENTAS SAGA TRANS · Comparativo por día de venta — ${mesTxt(ymPrevio(VD.ym))} vs ${mesTxt(VD.ym)}`,
+      subtitle: `${$('vCmpFiltroPrint').textContent} · corte al ${largo(vs.corte)}`,
+      columns: [colInt('Día de venta'), colTxt(`Fecha ${yP}`, 12), colMoney(`Venta ${yP}`), colMoney(`Acumulado ${yP}`), colTxt(`Fecha ${yA}`, 12), colMoney(`Venta ${yA}`), colMoney(`Acumulado ${yA}`), colPct('Var. acumulado')],
+      rows: r.dias.map(d => [d.n, d.fechaPrev ? fD(d.fechaPrev) : '', d.ventaPrev ?? '', d.acumPrev ?? '', d.fechaAct ? fD(d.fechaAct) : '', d.ventaAct ?? '', d.acumAct ?? '', vr(d.acumAct, d.acumPrev)]),
+      totalsRow: ['Total', '', r.prevMes, '', '', r.acumAct, '', vr(r.acumAct, r.prevMismoDia)],
+    });
   }
 
   // ---------------- Meta % (Overrides en ventas-data) ----------------
@@ -463,7 +588,8 @@
   function setTab(tab) {
     vs.tab = tab;
     document.querySelectorAll('.v-tabbar .tab-btn').forEach(b => b.classList.toggle('tab-active', b.dataset.vtab === tab));
-    ['avance', 'cobertura', 'documentos', 'alertas'].forEach(t => { $('vpanel-' + t).style.display = t === tab ? '' : 'none'; });
+    ['avance', 'cobertura', 'comparativo', 'documentos', 'alertas'].forEach(t => { $('vpanel-' + t).style.display = t === tab ? '' : 'none'; });
+    if (tab === 'comparativo' && VD) renderCmp();
   }
   async function mostrarModulo(nombre) {
     $('modRechazos').style.display = nombre === 'rechazos' ? '' : 'none';
@@ -515,6 +641,15 @@
     $('vExportCobMes').addEventListener('click', () => exportCob('mes'));
     $('vExportCobDia').addEventListener('click', () => exportCob('dia'));
     $('vExportDocs').addEventListener('click', exportDocs);
+    // Comparativo
+    $('vCmpCats').addEventListener('change', e => {
+      if (e.target.type !== 'checkbox') return;
+      e.target.checked ? vs.cmp.cats.add(e.target.value) : vs.cmp.cats.delete(e.target.value);
+      renderCmp();
+    });
+    $('vCmpDiario').addEventListener('click', () => { vs.cmp.vista = 'diario'; renderCmp(); });
+    $('vCmpAcum').addEventListener('click', () => { vs.cmp.vista = 'acum'; renderCmp(); });
+    $('vExportCmp').addEventListener('click', exportCmp);
     // Filtros de Documentos
     $('vDocSearch').addEventListener('input', e => { vs.doc.buscar = e.target.value; vs.doc.page = 0; dibujarDocs(); });
     $('vDocVend').addEventListener('change', e => { vs.doc.vend = e.target.value; vs.doc.page = 0; dibujarDocs(); });

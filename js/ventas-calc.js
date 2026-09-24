@@ -242,10 +242,15 @@
       const q100 = (cuotas[v] && cuotas[v].porCat[cat]) || 0;
       const c = (idx[v] && idx[v][cat]) || { mes: 0, antes: 0, hoy: 0 };
       const pendientes = cart.size - cubAntes.size;
+      // Cuota diaria = lo que falta ÷ días hábiles restantes (después del corte).
+      // Si ya cumplió la cuota del mes, se muestra la cuota diaria "normal"
+      // (cuota ÷ días hábiles del mes) para que igual se vea cuánto hizo hoy.
+      // El último día (0 restantes) se divide entre 1: lo que falta es para ese día.
       let cuotaDiaria = null, cuotaCumplida = false;
-      if (hab.restantes > 0) {
+      if (q > 0) {
         const falta = q - c.antes;
-        if (falta <= 0) { cuotaDiaria = 0; cuotaCumplida = true; } else cuotaDiaria = falta / hab.restantes;
+        if (falta <= 0) { cuotaCumplida = true; cuotaDiaria = hab.total > 0 ? q / hab.total : null; }
+        else cuotaDiaria = falta / Math.max(hab.restantes, 1);
       }
       filas.push({
         vendedor: v, nombre: (cuotas[v] && cuotas[v].nombre) || nombres[v] || v,
@@ -320,8 +325,45 @@
     return [...new Set(ventas.map(r => r.fecha).filter(Boolean))].sort();
   }
 
+  // ---------------- 5. Comparativo por DÍA DE VENTA ----------------
+  // Día de venta N = N-ésima fecha con facturación en el Excel del mes (de toda la
+  // empresa, sin filtros), así domingos, feriados y días no trabajados se saltan solos.
+  // actual se corta en la fecha de corte; previo se toma completo.
+  function comparativo({ actual, previo, cats, vendedor, corte }) {
+    const cs = new Set(cats);
+    const serie = (rows, fechas) => {
+      const m = Object.fromEntries(fechas.map(f => [f, 0]));
+      rows.forEach(r => {
+        if (!cs.has(r.cat) || (vendedor && r.vendedor !== vendedor) || !(r.fecha in m)) return;
+        m[r.fecha] += r.soles;
+      });
+      return fechas.map(f => m[f]);
+    };
+    const fa = fechasDisponibles(actual).filter(f => !corte || f <= corte);
+    const fp = fechasDisponibles(previo);
+    const va = serie(actual, fa), vp = serie(previo, fp);
+    const dias = [];
+    let sa = 0, sp = 0;
+    for (let i = 0; i < Math.max(fa.length, fp.length); i++) {
+      const hayA = i < fa.length, hayP = i < fp.length;
+      if (hayA) sa += va[i];
+      if (hayP) sp += vp[i];
+      dias.push({
+        n: i + 1,
+        fechaAct: hayA ? fa[i] : null, ventaAct: hayA ? va[i] : null, acumAct: hayA ? sa : null,
+        fechaPrev: hayP ? fp[i] : null, ventaPrev: hayP ? vp[i] : null, acumPrev: hayP ? sp : null,
+      });
+    }
+    const nAct = fa.length;
+    const prevMismoDia = nAct && nAct <= fp.length ? dias[nAct - 1].acumPrev : (fp.length ? sp : null);
+    return {
+      dias, nAct, nPrev: fp.length, acumAct: sa, prevMismoDia, prevMes: sp,
+      variacion: prevMismoDia ? sa / prevMismoDia - 1 : null,
+    };
+  }
+
   const VentasCalc = { txt, code, num, fecha, parseVentas, parseCuotas, parseCartera, parseCalendario,
-    diasDelMes, habiles, avanceGeneral, cobertura, fueraDeCartera, documentos, fechasDisponibles, estado };
+    diasDelMes, habiles, avanceGeneral, cobertura, fueraDeCartera, documentos, fechasDisponibles, comparativo, estado };
   if (typeof module !== 'undefined' && module.exports) module.exports = VentasCalc;
   else root.VentasCalc = VentasCalc;
 })(typeof window !== 'undefined' ? window : this);
