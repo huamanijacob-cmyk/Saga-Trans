@@ -6,7 +6,9 @@
   --card-border:#E4E0D4;
   --row-border:#F0EDE5;
   --navy:#16356B;
-  --teal:#1F9A8C;
+  --teal:#1F9A8C;       /* solo para "bien" (semáforo de Rechazos) */
+  --brand:#2E6FB7;      /* azul del logo: acento del panel */
+  --brand-soft:#5B9BE6; /* azul suave del degradado del logo */
   --red:#C1432B;
   --amber:#B8862F;
 }
@@ -35,7 +37,7 @@ button{transition:background .15s ease,color .15s ease,border-color .15s ease,bo
   width:100%;max-width:380px;background:#FFFFFF;border:1px solid var(--card-border);border-radius:16px;
   padding:32px;box-shadow:0 4px 24px rgba(22,53,107,.08);
 }
-.login-title{margin:6px 0 4px;font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:600;color:var(--ink);}
+.login-title{margin:6px 0 4px;font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:700;color:var(--ink);letter-spacing:-.01em;}
 .login-sub{margin:0 0 20px;font-size:13px;color:var(--muted);}
 #loginForm{display:flex;flex-direction:column;gap:6px;}
 #loginForm label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:10px;}
@@ -95,7 +97,7 @@ button{transition:background .15s ease,color .15s ease,border-color .15s ease,bo
   display:flex;flex-direction:column;align-items:center;padding:20px 0;gap:6px;
 }
 .rail-logo{
-  width:34px;height:34px;border-radius:9px;background:var(--teal);
+  width:34px;height:34px;border-radius:9px;background:var(--brand);
   display:flex;align-items:center;justify-content:center;margin-bottom:18px;
 }
 .rail-item{
@@ -103,8 +105,8 @@ button{transition:background .15s ease,color .15s ease,border-color .15s ease,bo
   width:52px;padding:10px 0;border-radius:10px;color:#8FA3C9;transition:background .15s ease,color .15s ease;
 }
 .rail-item:hover{background:rgba(255,255,255,.08);color:#FFFFFF;}
-.rail-active{background:var(--teal);color:#FFFFFF;box-shadow:0 2px 10px rgba(31,154,140,.45);}
-.rail-active:hover{background:var(--teal);color:#FFFFFF;}
+.rail-active{background:var(--brand);color:#FFFFFF;box-shadow:0 2px 10px rgba(46,111,183,.5);}
+.rail-active:hover{background:var(--brand);color:#FFFFFF;}
 .rail-label{font-size:9px;letter-spacing:.02em;text-align:center;line-height:1.2;}
 
 /* ---------- Layout principal ---------- */
@@ -114,7 +116,7 @@ button{transition:background .15s ease,color .15s ease,border-color .15s ease,bo
 .page-header{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;padding-bottom:18px;border-bottom:1px solid var(--card-border);}
 .eyebrow{
   font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;
-  text-transform:uppercase;color:var(--teal);font-weight:600;
+  text-transform:uppercase;color:var(--brand);font-weight:600;
   display:flex;align-items:center;gap:8px;
 }
 .eyebrow::before{content:'';width:16px;height:2px;background:var(--red);display:inline-block;border-radius:2px;}
@@ -160,7 +162,7 @@ button{transition:background .15s ease,color .15s ease,border-color .15s ease,bo
 }
 .kpi:hover{box-shadow:0 6px 20px rgba(22,53,107,.09);transform:translateY(-1px);}
 .kpi-navy{border-top-color:var(--navy);}
-.kpi-teal{border-top-color:var(--teal);}
+.kpi-teal{border-top-color:var(--brand-soft);}
 .kpi-red{border-top-color:var(--red);}
 .kpi-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
 .kpi-val{margin-top:8px;font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--ink);white-space:nowrap;font-size:clamp(17px,1.9vw,24px);}
@@ -315,3 +317,11 @@ th button:hover{color:var(--red);}
   .page-title{font-size:26px;}
   .rail{width:52px;}
 }
+
+/* ---------- v1.0: login centrado + logo Saga Trans ---------- */
+.login-card{max-width:400px;padding:36px 32px;text-align:center;}
+.login-logo{display:block;width:100%;max-width:240px;height:auto;margin:0 auto 6px;}
+.login-sub{font-size:14px;margin:0 0 18px;}
+#loginForm{text-align:left;}
+.login-version{margin-top:18px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);}
+.rail-logo-st{background:transparent;width:44px;height:44px;}
