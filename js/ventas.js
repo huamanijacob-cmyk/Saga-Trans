@@ -47,7 +47,18 @@
   let CMP_CHART = null;
   let VD = null;   // datos del mes cargado
   let VR = {};     // últimos resultados calculados
-  window.VENTAS = { state: vs, get data() { return VD; }, get res() { return VR; }, config: VCFG };
+  window.VENTAS = {
+    state: vs, get data() { return VD; }, get res() { return VR; }, config: VCFG,
+    // Llamado desde Rechazos: muestra en Documentos exactamente las filas de esa cifra.
+    abrirDesdeRechazos: async ({ quien, modo, filas, monto }) => {
+      const parsed = C.parseVentas(filas);
+      await mostrarModulo('ventas');
+      vs.ext = { quien, modo, monto, filas: parsed, cats: [...new Set(parsed.map(r => r.cat))] };
+      vs.doc.page = 0;
+      setTab('documentos');
+      dibujarDocs();
+    },
+  };
 
   // ---------------- Formato ----------------
   const pad = n => String(n).padStart(2, '0');
@@ -237,9 +248,9 @@
 
   function renderHabiles() {
     const h = VR.hab;
-    const ex = h.dias.filter(d => d.excepcion);
-    const exTxt = ex.length ? ` · ${ex.length} día${ex.length > 1 ? 's' : ''} del calendario` : '';
-    $('vHabiles').innerHTML = `<span class="v-dot"></span>Teórico: <b>${fT(teorico())}</b> · <b>${h.transcurridos}</b> de <b>${h.total}</b> días hábiles · restan <b>${h.restantes}</b>${exTxt}`;
+    $('vHabiles').innerHTML = `<div class="v-dia v-dia-brand"><div class="kpi-label">Teórico</div><div class="v-dia-val">${fT(teorico())}</div></div>`
+      + `<div class="v-dia"><div class="kpi-label">Días hábiles</div><div class="v-dia-val">${h.transcurridos} de ${h.total}</div></div>`
+      + `<div class="v-dia v-dia-soft"><div class="kpi-label">Días faltantes</div><div class="v-dia-val">${h.restantes}</div></div>`;
     const [y, m] = VD.ym.split('-').map(Number);
     const first = (new Date(y, m - 1, 1).getDay() + 6) % 7;
     let html = '<div class="v-cal-grid">' + ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => `<div class="v-cal-hd">${d}</div>`).join('') + '<div></div>'.repeat(first);
@@ -285,10 +296,10 @@
     const T0 = teorico();
     $('vAvanceKpis').innerHTML =
       kpi('navy', 'Cuota', fS(T.cuota), Math.round(vs.meta * 100) !== 100 ? `100% ${fS(T.cuota100)} · meta ${Math.round(vs.meta * 100)}%` : catNames) +
-      kpi('teal', 'Facturado', fS(T.facturado), 'venta neta sin IGV') +
+      kpi('teal', 'Avance', fS(T.facturado), 'venta neta sin IGV') +
       kpi('navy', '% Avance', fP(T.pct), `teórico ${fT(T0)}`) +
       kpi(T.estado === 'ritmo' ? 'green' : T.estado === 'atencion' ? 'amber' : 'red', 'Proyección de cierre', fP(T.proy), EST_LABEL[T.estado] || '');
-    tb.querySelector('thead').innerHTML = '<tr><th class="c">Código</th><th>Vendedor</th><th class="r">Cuota</th><th class="r">Facturado</th><th class="c">% Avance</th><th class="c">Proyección</th><th class="c">Estado</th><th class="c">Ranking</th></tr>';
+    tb.querySelector('thead').innerHTML = '<tr><th class="c">Código</th><th>Vendedor</th><th class="r">Cuota</th><th class="r">Avance</th><th class="c">% Avance</th><th class="c">Proyección</th><th class="c">Estado</th><th class="c">Ranking</th></tr>';
     tb.querySelector('tbody').innerHTML = ag.filas.map(f => `<tr class="${f.sinRanking ? 'v-muted' : ''}">
       <td class="mono c">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
       <td class="num">${cuotaHtml(f.cuota, f.cuota100)}</td>
@@ -376,7 +387,13 @@
     dibujarDocs();
   }
   function dibujarDocs() {
-    const docs = filtrarDocs();
+    const ext = vs.ext;
+    $('vDocFiltros').style.display = ext ? 'none' : '';
+    $('vDocExt').style.display = ext ? '' : 'none';
+    if (ext) $('vDocExt').innerHTML = `<span>Rechazos · <b>${esc(title(ext.quien))}</b> · ${ext.modo === 'real' ? 'Venta real' : 'Facturado'} · <b>${fS(ext.monto)}</b></span><button class="export-btn v-volver" id="vVolverRech">↩ Volver a Rechazos</button>`;
+    const docs = ext
+      ? C.documentos(ext.filas, { vendedor: null, cats: ext.cats, desde: '0000/00/00', hasta: '9999/99/99', buscar: '' })
+      : filtrarDocs();
     VR.docs = docs;
     const tot = docs.reduce((a, d) => ({ venta: a.venta + d.venta, devolucion: a.devolucion + d.devolucion, neto: a.neto + d.neto }), { venta: 0, devolucion: 0, neto: 0 });
     VR.docsTot = tot;
@@ -397,6 +414,7 @@
     tb.querySelector('tfoot').innerHTML = `<tr><td colspan="6">Total (${fN(docs.length)} documentos)</td><td class="num">${fS2(tot.venta)}</td><td class="num rej">${fS2(tot.devolucion)}</td><td class="num">${fS2(tot.neto)}</td></tr>`;
   }
   function irADocs(ds) {
+    vs.ext = null;
     vs.doc = { buscar: ds.cli || '', vend: ds.v || 'all', cat: 'all', cats: ds.cats ? ds.cats.split(',') : null, desde: ds.desde, hasta: ds.hasta, page: 0 };
     setTab('documentos');
     renderDocs();
@@ -504,6 +522,29 @@
     tb.querySelector('tfoot').innerHTML = `<tr><td class="c">Total</td><td></td><td class="num">${r.nPrev ? fS(r.prevMes) : ''}</td><td></td><td></td><td class="num">${fS(r.acumAct)}</td><td></td>
       <td class="num c">${varCell(r.acumAct, r.prevMismoDia)}</td></tr>`;
   }
+  function exportCmpImg() {
+    if (!CMP_CHART) return;
+    const src = CMP_CHART.canvas, esc2 = 2, pad = 24, head = 70;
+    const out = document.createElement('canvas');
+    out.width = src.width + pad * 2 * esc2 / 2; out.height = src.height + head * esc2 / 2 + pad;
+    const g = out.getContext('2d');
+    g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, out.width, out.height);
+    const k = src.width / src.clientWidth;
+    g.fillStyle = '#211F1A'; g.font = `600 ${16 * k}px "Space Grotesk", Arial, sans-serif`;
+    g.fillText(`Comparativo por día de venta · ${$('vCmpTitulo').textContent}`, pad, 26 * k);
+    g.fillStyle = '#6B675F'; g.font = `${12 * k}px "IBM Plex Sans", Arial, sans-serif`;
+    g.fillText(`${$('vCmpFiltroPrint').textContent} · corte al ${largo(vs.corte)}`, pad, 44 * k);
+    const ds = CMP_CHART.data.datasets; let x = pad;
+    ds.forEach(d => {
+      g.strokeStyle = d.borderColor; g.lineWidth = 2.5 * k; g.setLineDash(d.borderDash ? d.borderDash.map(v => v * k) : []);
+      g.beginPath(); g.moveTo(x, 58 * k); g.lineTo(x + 22 * k, 58 * k); g.stroke(); g.setLineDash([]);
+      g.fillStyle = '#6B675F'; g.fillText(d.label, x + 28 * k, 62 * k); x += 90 * k;
+    });
+    g.drawImage(src, pad, head * k);
+    const a = document.createElement('a');
+    a.href = out.toDataURL('image/png'); a.download = `grafico_comparativo_${ymPrevio(VD.ym)}_vs_${VD.ym}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
   function exportCmp() {
     const r = VR.comparativo; if (!r) return;
     const yA = VD.ym.slice(0, 4), yP = ymPrevio(VD.ym).slice(0, 4);
@@ -551,7 +592,7 @@
       filename: `avance_ventas_${fileDate()}.xlsx`, sheetName: 'Avance general',
       title: `VENTAS SAGA TRANS · Confitería — Avance de ventas (${cats})`,
       subtitle: `Corte al ${largo(vs.corte)} · teórico ${fT(teorico())} (${VR.hab.transcurridos} de ${VR.hab.total} días hábiles)${metaSub()}`,
-      columns: [colCode('Código'), colTxt('Vendedor'), colMoney('Cuota 100%'), colMoney('Cuota'), colMoney('Facturado'), colPct('% Avance'), colPct('Proyección'), colTxt('Estado', 12), colInt('Ranking')],
+      columns: [colCode('Código'), colTxt('Vendedor'), colMoney('Cuota 100%'), colMoney('Cuota'), colMoney('Avance'), colPct('% Avance'), colPct('Proyección'), colTxt('Estado', 12), colInt('Ranking')],
       rows: ag.filas.map(f => [f.vendedor, title(f.nombre), f.cuota100, f.cuota, f.facturado, p100(f.pct), p100(f.proy), EST_LABEL[f.estado] || '', f.ranking || '']),
       totalsRow: ['', 'Saga Trans Confitería', ag.total.cuota100, ag.total.cuota, ag.total.facturado, p100(ag.total.pct), p100(ag.total.proy), EST_LABEL[ag.total.estado] || '', ''],
     });
@@ -578,7 +619,8 @@
     const docs = VR.docs || [], t = VR.docsTot || { venta: 0, devolucion: 0, neto: 0 };
     downloadStyledXlsx({
       filename: `documentos_ventas_${toIso(vs.doc.desde)}_al_${toIso(vs.doc.hasta)}.xlsx`, sheetName: 'Documentos',
-      title: 'VENTAS SAGA TRANS · Confitería — Documentos', subtitle: $('vDocLabel').textContent,
+      title: 'VENTAS SAGA TRANS · Confitería — Documentos',
+      subtitle: vs.ext ? `Desde Rechazos · ${title(vs.ext.quien)} · ${vs.ext.modo === 'real' ? 'Venta real' : 'Facturado'}` : $('vDocLabel').textContent,
       columns: [colTxt('Fecha', 12), colCode('Documento'), colCode('Vendedor'), colCode('Código'), colTxt('Cliente', 34), colTxt('Categoría', 16), colMoney2('Venta'), colMoney2('Devolución'), colMoney2('Neto')],
       rows: docs.map(d => [fD(d.fecha), d.documento, d.vendedor, d.codigo, d.cliente, title(d.cats), d.venta, d.devolucion || '', d.neto]),
       totalsRow: ['Total', '', '', '', `${docs.length} documentos`, '', t.venta, t.devolucion, t.neto],
@@ -591,10 +633,12 @@
 
   // ---------------- Pestañas y módulos ----------------
   function setTab(tab) {
+    if (tab !== 'documentos') vs.ext = null;
     vs.tab = tab;
     document.querySelectorAll('.v-tabbar .tab-btn').forEach(b => b.classList.toggle('tab-active', b.dataset.vtab === tab));
     ['avance', 'cobertura', 'comparativo', 'documentos', 'alertas'].forEach(t => { $('vpanel-' + t).style.display = t === tab ? '' : 'none'; });
     if (tab === 'comparativo' && VD) renderCmp();
+    if (tab === 'documentos' && VD) dibujarDocs();
   }
   async function mostrarModulo(nombre) {
     $('modRechazos').style.display = nombre === 'rechazos' ? '' : 'none';
@@ -605,7 +649,8 @@
     if (nombre !== 'ventas') return;
     const { data } = await supabaseClient.auth.getSession();
     const email = data?.session?.user?.email || '';
-    $('vUserEmail').textContent = email; $('vUserAvatar').textContent = (email || '?').charAt(0).toUpperCase();
+    const quien = nombreDesdeCorreo(email);
+    $('vUserEmail').textContent = quien.nombre; $('vUserEmail').title = email; $('vUserAvatar').textContent = quien.iniciales;
     if (!vs.booted) {
       vs.booted = true;
       try { await aplicarCorte(); } catch (e) {
@@ -655,6 +700,8 @@
     $('vCmpDiario').addEventListener('click', () => { vs.cmp.vista = 'diario'; renderCmp(); });
     $('vCmpAcum').addEventListener('click', () => { vs.cmp.vista = 'acum'; renderCmp(); });
     $('vExportCmp').addEventListener('click', exportCmp);
+    $('vExportCmpImg').addEventListener('click', exportCmpImg);
+    $('vDocExt').addEventListener('click', e => { if (e.target.closest('#vVolverRech')) { vs.ext = null; mostrarModulo('rechazos'); } });
     // Filtros de Documentos
     $('vDocSearch').addEventListener('input', e => { vs.doc.buscar = e.target.value; vs.doc.page = 0; dibujarDocs(); });
     $('vDocVend').addEventListener('change', e => { vs.doc.vend = e.target.value; vs.doc.page = 0; dibujarDocs(); });

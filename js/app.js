@@ -755,6 +755,21 @@ async function exportConductorCSV() {
   });
 }
 
+// Clic en Facturado / Venta real → abre Ventas › Documentos con esas mismas filas.
+// Facturado = solo las ventas (V). Venta real = ventas y devoluciones (V + D), su neto es la venta real.
+function choferKey(r) { return r._chofer && r._chofer.codcho ? r._chofer.codcho : 'SIN_CHOFER'; }
+function tdAVentas(cls, monto, modo, quien, filtro) {
+  const td = el('td', cls + ' clickable', fmtMoney(monto));
+  if (!window.VENTAS || !window.VENTAS.abrirDesdeRechazos) return td;
+  td.title = 'Ver documentos en Ventas';
+  td.addEventListener('click', e => {
+    e.stopPropagation();
+    const filas = CORTE_DATA.ventas.filter(r => filtro(r) && (modo === 'real' ? (r.vtadvo === 'V' || r.vtadvo === 'D') : r.vtadvo === 'V'));
+    window.VENTAS.abrirDesdeRechazos({ quien, modo, filas, monto, corte: getCorteLabel() });
+  });
+  return td;
+}
+
 function aggregateConductor() {
   const map = {};
   CORTE_DATA.ventas.forEach(r => {
@@ -822,8 +837,8 @@ function renderConductor() {
     const tr = el('tr', 'clickable');
     tr.addEventListener('click', () => goToDocs({ chofer: r.cod }));
     tr.appendChild(el('td', null, `${r.nombre}<div class="sub">${r.cod}</div>`));
-    tr.appendChild(el('td', 'num', fmtMoney(r.facturado)));
-    tr.appendChild(el('td', 'num muted', fmtMoney(r.ventaReal)));
+    tr.appendChild(tdAVentas('num', r.facturado, 'facturado', 'Chofer ' + r.nombre, row => choferKey(row) === r.cod));
+    tr.appendChild(tdAVentas('num muted', r.ventaReal, 'real', 'Chofer ' + r.nombre, row => choferKey(row) === r.cod));
     tr.appendChild(el('td', 'num rej', fmtMoney(r.monto)));
     tr.appendChild(el('td', 'num', r.pedidos));
     tr.appendChild(pctCell(r.pct, state.cond.umbral));
@@ -943,8 +958,8 @@ function renderVendedor() {
     tr.addEventListener('click', () => goToDocs({ vendedor: v.cod }));
     const nombre = v.cod === 'OFICINA' ? 'Vendedor Oficina' : VENDOR_NAMES[v.cod];
     tr.appendChild(el('td', null, nombre ? `${nombre}${v.cod === 'OFICINA' ? '' : `<div class="sub">Vendedor ${v.cod}</div>`}` : `Vendedor ${v.cod}<div class="sub" style="font-style:italic">nombre pendiente</div>`));
-    tr.appendChild(el('td', 'num', fmtMoney(v.facturado)));
-    tr.appendChild(el('td', 'num muted', fmtMoney(v.ventaReal)));
+    tr.appendChild(tdAVentas('num', v.facturado, 'facturado', vendedorLabel(v.cod), row => vendedorKey(row) === v.cod));
+    tr.appendChild(tdAVentas('num muted', v.ventaReal, 'real', vendedorLabel(v.cod), row => vendedorKey(row) === v.cod));
     tr.appendChild(el('td', 'num rej', fmtMoney(v.monto)));
     tr.appendChild(el('td', 'num', v.pedidos));
     tr.appendChild(pctCell(v.pct, state.vend.umbral));
@@ -1561,8 +1576,9 @@ let appBooted = false;
 async function showApp(session) {
   loginScreen.style.display = 'none';
   appRoot.style.display = '';
-  if (userEmailLabel) userEmailLabel.textContent = session?.user?.email || '';
-  if (userAvatar) userAvatar.textContent = (session?.user?.email || '?').trim().charAt(0).toUpperCase();
+  const quien = nombreDesdeCorreo(session?.user?.email || '');
+  if (userEmailLabel) { userEmailLabel.textContent = quien.nombre; userEmailLabel.title = session?.user?.email || ''; }
+  if (userAvatar) userAvatar.textContent = quien.iniciales;
   sessionActive = true;
   resetInactivityTimer();
 
