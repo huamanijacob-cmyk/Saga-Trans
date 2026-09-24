@@ -324,12 +324,19 @@ th button:hover{color:var(--red);}
 .login-sub{font-size:14px;margin:0 0 18px;}
 #loginForm{text-align:left;}
 .login-version{margin-top:18px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);}
-.rail-logo-st{background:transparent;width:44px;height:44px;}
+.rail-logo-st{background:transparent;}
 
-/* ---------- v1.0: menú lateral más ancho y fijo · nombre del usuario ---------- */
-.rail{width:92px;position:sticky;top:0;height:100vh;align-self:flex-start;overflow-y:auto;}
-.rail-item{width:70px;}
-.rail-label{font-size:10px;}
+/* ---------- v1.0: menú lateral más grande y fijo · nombre del usuario ---------- */
+.rail{width:112px;position:sticky;top:0;height:100vh;align-self:flex-start;overflow-y:auto;gap:8px;}
+.rail-item{width:92px;padding:12px 0;gap:6px;}
+.rail-item svg{width:24px;height:24px;}
+.rail-label{font-size:12.5px;}
+.rail-logo.rail-logo-st{width:80px;height:80px;margin:2px 0 18px;}
+.rail-logo-short{display:block;width:80px;height:80px;}
 .account-email{font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:500;color:var(--ink);max-width:220px;}
-@media (max-width:900px){ .rail{width:60px;} .rail-item{width:48px;} }
+@media (max-width:900px){ .rail{width:60px;} .rail-item{width:48px;} .rail-item svg{width:20px;height:20px;} .rail-logo.rail-logo-st{width:48px;height:48px;margin-bottom:14px;} .rail-logo-short{width:48px;height:48px;} }
 @media (max-width:560px){ .rail{width:52px;} .rail-item{width:44px;} }
+/* Montos que son enlaces (Rechazos: Facturado, Venta real, Monto rech.) */
+.r-link{color:var(--navy);border-bottom:1px dashed #9FB0CF;cursor:pointer;}
+.r-link.rej-link{color:var(--red);border-bottom-color:#E7B0A4;}
+td.clickable:hover .r-link{border-bottom-style:solid;}
