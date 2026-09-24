@@ -4,7 +4,7 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 38 (umbral propio en Por vendedor)');
+console.log('Panel de Rechazos — app.js version 39 (chofer: se prioriza la fila realmente despachada)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -371,11 +371,22 @@ function vendedorLabel(cod) {
   return VENDOR_NAMES[cod] || ('Vendedor ' + cod);
 }
 
+// Una fila "real" es la que se despachó de verdad: tiene número de despacho (nrodsp ≠ 0)
+// y monto despachado (totdsp > 0). A veces el Excel trae además una fila vacía del mismo
+// documento (INTERNO, despacho 0, S/ 0): esa no debe ganarle a la fila real.
+function isDespachoReal(r) {
+  const n = String(r.nrodsp == null ? '' : r.nrodsp).replace(/[\r\n]+/g, '').trim();
+  return n !== '' && Number(n) !== 0 && (Number(r.totdsp) || 0) > 0;
+}
 function buildDocToChoferMap(transportistas) {
   const map = {};
+  const real = {};   // doc -> true si ya se guardó una fila realmente despachada
   transportistas.forEach(r => {
     const doc = buildDocNumber(r);
     if (doc) {
+      const esReal = isDespachoReal(r);
+      if (real[doc] && !esReal) return;   // no pisar una fila real con una vacía
+      if (esReal) real[doc] = true;
       // Algunas celdas "vacías" en el Excel en realidad traen basura
       // invisible (saltos de línea, espacios) en vez de estar realmente
       // vacías — hay que limpiarlas o JS las trata como "con contenido".
