@@ -5,7 +5,6 @@
 // =====================================================================
 (function (root) {
   'use strict';
-  if (typeof console !== 'undefined') console.log('Módulo Ventas — ventas-calc.js version 6 (neto > 0 · meta del día = pendientes)');
 
   // ---------------- Saneo de datos crudos ----------------
   // Quita \r\n, espacios y convierte a texto. NUNCA usar !!valor para
@@ -53,7 +52,8 @@
     }
     return undefined;
   }
-  function cliKey(codclte, domic) { return `${codclte}-${domic}`; }
+  // Código de cliente-local = código de cliente + código de domicilio, todo junto (001829 + 001 → 001829001).
+  function cliKey(codclte, domic) { return `${codclte}${domic}`; }
   function docNumber(r) { return `${r.tipo}${r.serie}${r.doc}`; }
 
   // ---------------- Lectura de cada archivo ----------------

@@ -4,7 +4,6 @@
    igual que el patrón de tu otro proyecto: SheetJS en el navegador.
    ============================================================ */
 
-console.log('Panel de Rechazos — app.js version 39 (chofer: se prioriza la fila realmente despachada)');
 
 // Bloquea el bfcache: si el navegador restaura una foto congelada de la
 // página (Atrás/Adelante después de cerrar sesión), fuerza una recarga real
@@ -139,7 +138,7 @@ function downloadBlob(filename, content, mime) {
 
 // Paleta del panel, en ARGB (formato que pide ExcelJS).
 const XL_NAVY = 'FF16356B';
-const XL_TEAL = 'FF1F9A8C';
+const XL_TEAL = 'FF2E6FB7';   // acento del panel (azul del logo Saga Trans)
 const XL_RED = 'FFC1432B';
 const XL_CREAM = 'FFF5F3ED';
 const XL_STRIPE = 'FFFBF9F4';

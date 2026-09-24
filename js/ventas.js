@@ -7,8 +7,6 @@
    ===================================================================== */
 (function () {
   'use strict';
-  const VERSION = 8;
-  console.log('Módulo Ventas — ventas.js version ' + VERSION);
 
   // ---------------- Configuración del módulo ----------------
   const VCFG = {
@@ -289,7 +287,7 @@
       kpi('navy', 'Cuota', fS(T.cuota), Math.round(vs.meta * 100) !== 100 ? `100% ${fS(T.cuota100)} · meta ${Math.round(vs.meta * 100)}%` : catNames) +
       kpi('teal', 'Facturado', fS(T.facturado), 'venta neta sin IGV') +
       kpi('navy', '% Avance', fP(T.pct), `teórico ${fT(T0)}`) +
-      kpi(T.estado === 'ritmo' ? 'teal' : T.estado === 'atencion' ? 'amber' : 'red', 'Proyección de cierre', fP(T.proy), EST_LABEL[T.estado] || '');
+      kpi(T.estado === 'ritmo' ? 'green' : T.estado === 'atencion' ? 'amber' : 'red', 'Proyección de cierre', fP(T.proy), EST_LABEL[T.estado] || '');
     tb.querySelector('thead').innerHTML = '<tr><th class="c">Código</th><th>Vendedor</th><th class="r">Cuota</th><th class="r">Facturado</th><th class="c">% Avance</th><th class="c">Proyección</th><th class="c">Estado</th><th class="c">Ranking</th></tr>';
     tb.querySelector('tbody').innerHTML = ag.filas.map(f => `<tr class="${f.sinRanking ? 'v-muted' : ''}">
       <td class="mono c">${esc(f.vendedor)}</td><td>${esc(title(f.nombre))}</td>
@@ -451,7 +449,7 @@
     $('vCmpKpis').innerHTML =
       kpi('navy', `${yA} · ${n} días de venta`, fS(r.acumAct), `al ${diaCorto(vs.corte)}`) +
       kpi('red', `${yP} · mismos ${Math.min(n, r.nPrev)} días`, r.prevMismoDia === null ? '—' : fS(r.prevMismoDia), r.nPrev ? `al ${diaCorto(r.dias[Math.min(n, r.nPrev) - 1].fechaPrev)}` : 'sin datos') +
-      kpi(v === null || v >= 0 ? 'teal' : 'red', 'Variación al mismo día', vTxt, dif === null ? '' : `${dif >= 0 ? '+' : '−'}${fS(Math.abs(dif))}`) +
+      kpi(v === null || v >= 0 ? 'green' : 'red', 'Variación al mismo día', vTxt, dif === null ? '' : `${dif >= 0 ? '+' : '−'}${fS(Math.abs(dif))}`) +
       kpi('amber', `${yP} · mes completo`, r.nPrev ? fS(r.prevMes) : '—', r.nPrev ? `${r.nPrev} días de venta` : '');
     $('vCmpLegend').innerHTML = `<span><i class="prev"></i>${title(mesTxt(py))}</span><span><i></i>${title(mesTxt(ym))}</span>`;
     // Gráfico
