@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel de Rechazos · Saga Trans Confitería</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=16">
-<link rel="stylesheet" href="css/ventas.css?v=1">
+<link rel="stylesheet" href="css/style.css?v=17">
+<link rel="stylesheet" href="css/ventas.css?v=3">
 </head>
 <body>
 
@@ -364,6 +364,7 @@
           <div class="no-print v-tabbar">
             <button class="tab-btn tab-active" data-vtab="avance">Avance general</button>
             <button class="tab-btn" data-vtab="cobertura">Cobertura</button>
+            <button class="tab-btn" data-vtab="comparativo">Comparativo</button>
             <button class="tab-btn" data-vtab="documentos">Documentos</button>
             <button class="tab-btn" data-vtab="alertas">Alertas<span class="v-count zero" id="vAlertasCount">0</span></button>
           </div>
@@ -405,7 +406,6 @@
                 <div class="table-scroll"><table class="v-table" id="vAvanceTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
               </div>
             </div>
-            <div class="note">Clic en un monto de Facturado para ver sus documentos. Facturado = venta neta (ventas − devoluciones), sin IGV. Proyección = % avance ÷ % de días hábiles transcurridos.</div>
           </section>
 
           <!-- ===== VENTAS · COBERTURA ===== -->
@@ -440,7 +440,47 @@
               <div class="v-block-title" id="vCobTitDia">Acumulado del día</div>
               <div class="card"><div class="table-scroll"><table class="v-table" id="vCobDiaTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div></div>
             </div>
-            <div class="note">Clientes únicos por código + domicilio, solo de la cartera activa (cliente AC y local AC). Venta del día = clientes que compraron la categoría en la fecha de corte y no habían comprado antes en el mes. Cuota diaria = (cuota − avance hasta el día anterior) ÷ días hábiles restantes.</div>
+          </section>
+
+          <!-- ===== VENTAS · COMPARATIVO ===== -->
+          <section class="tab-panel" id="vpanel-comparativo" style="display:none;">
+            <div class="no-print section-head">
+              <div class="section-title">Comparativo por día de venta · <span id="vCmpTitulo">—</span></div>
+              <div class="export-group">
+                <button class="export-btn" data-vprint="vPrint-comparativo">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                  Descargar PDF
+                </button>
+                <button class="export-btn" id="vExportCmp">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                  Descargar Excel
+                </button>
+              </div>
+            </div>
+            <div class="no-print toolbar">
+              <div class="v-cats" id="vCmpCats"></div>
+              <div class="v-meta">
+                <div class="segmented">
+                  <button class="tab-btn" id="vCmpDiario">Diario</button>
+                  <button class="tab-btn tab-active" id="vCmpAcum">Acumulado</button>
+                </div>
+              </div>
+            </div>
+            <div class="pendiente-banner no-print" id="vCmpSinPrevio" style="display:none;"></div>
+            <div id="vPrint-comparativo" style="display:flex;flex-direction:column;gap:20px;">
+              <div class="print-title">
+                <div class="print-title-main">Comparativo por día de venta · <span class="vCmpTituloInline"></span></div>
+                <div class="print-title-sub">Saga Trans Confitería · <span id="vCmpFiltroPrint"></span> · Corte al <span class="vCorteInline">—</span></div>
+              </div>
+              <div class="kpi-grid kpi-grid-4" id="vCmpKpis"></div>
+              <div class="card v-chart-card">
+                <div class="v-chart-legend" id="vCmpLegend"></div>
+                <div class="v-chart-box"><canvas id="vCmpChart" role="img" aria-label="Venta por día de venta, año actual contra año anterior"></canvas></div>
+              </div>
+              <div class="card">
+                <div class="table-scroll"><table class="v-table" id="vCmpTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+              </div>
+            </div>
           </section>
 
           <!-- ===== VENTAS · DOCUMENTOS ===== -->
@@ -493,7 +533,6 @@
 
           <!-- ===== VENTAS · ALERTAS ===== -->
           <section class="tab-panel" id="vpanel-alertas" style="display:none;">
-            <div class="note">Ventas a clientes que no están en la cartera activa del vendedor. No se cuentan en la cobertura: revisa si el cliente o el local fue dado de baja, o si hay un dato mal registrado. Clic en el monto para ver sus documentos.</div>
             <div class="card">
               <div class="table-scroll"><table class="v-table" id="vAlertasTable"><thead></thead><tbody></tbody></table></div>
             </div>
@@ -510,7 +549,8 @@
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="js/config.js?v=4"></script>
   <script src="js/app.js?v=37"></script>
-  <script src="js/ventas-calc.js?v=1"></script>
-  <script src="js/ventas.js?v=1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="js/ventas-calc.js?v=3"></script>
+  <script src="js/ventas.js?v=5"></script>
 </body>
 </html>
