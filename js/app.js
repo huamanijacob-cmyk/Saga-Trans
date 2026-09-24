@@ -759,7 +759,7 @@ async function exportConductorCSV() {
 // Facturado = solo las ventas (V). Venta real = ventas y devoluciones (V + D), su neto es la venta real.
 function choferKey(r) { return r._chofer && r._chofer.codcho ? r._chofer.codcho : 'SIN_CHOFER'; }
 function tdAVentas(cls, monto, modo, quien, filtro) {
-  const td = el('td', cls + ' clickable', fmtMoney(monto));
+  const td = el('td', cls + ' clickable', `<span class="r-link">${fmtMoney(monto)}</span>`);
   if (!window.VENTAS || !window.VENTAS.abrirDesdeRechazos) return td;
   td.title = 'Ver documentos en Ventas';
   td.addEventListener('click', e => {
@@ -767,6 +767,14 @@ function tdAVentas(cls, monto, modo, quien, filtro) {
     const filas = CORTE_DATA.ventas.filter(r => filtro(r) && (modo === 'real' ? (r.vtadvo === 'V' || r.vtadvo === 'D') : r.vtadvo === 'V'));
     window.VENTAS.abrirDesdeRechazos({ quien, modo, filas, monto, corte: getCorteLabel() });
   });
+  return td;
+}
+
+// Monto rechazado → Documentos rechazados con ese filtro (antes lo hacía toda la fila).
+function tdADocsRechazados(monto, filtro) {
+  const td = el('td', 'num rej clickable', `<span class="r-link rej-link">${fmtMoney(monto)}</span>`);
+  td.title = 'Ver documentos rechazados';
+  td.addEventListener('click', e => { e.stopPropagation(); goToDocs(filtro); });
   return td;
 }
 
@@ -823,7 +831,6 @@ function renderConductor() {
     <th style="text-align:right"><button data-sort="monto">Monto rech.</button></th>
     <th style="text-align:right"><button data-sort="pedidos">Pedidos</button></th>
     <th style="text-align:center"><button data-sort="pct">% Rechazo</button></th>
-    <th style="width:20px"></th>
   </tr>`;
   thead.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     const k = b.dataset.sort;
@@ -834,27 +841,24 @@ function renderConductor() {
 
   tbody.innerHTML = '';
   rows.forEach(r => {
-    const tr = el('tr', 'clickable');
-    tr.addEventListener('click', () => goToDocs({ chofer: r.cod }));
+    const tr = el('tr');
     tr.appendChild(el('td', null, `${r.nombre}<div class="sub">${r.cod}</div>`));
     tr.appendChild(tdAVentas('num', r.facturado, 'facturado', 'Chofer ' + r.nombre, row => choferKey(row) === r.cod));
     tr.appendChild(tdAVentas('num muted', r.ventaReal, 'real', 'Chofer ' + r.nombre, row => choferKey(row) === r.cod));
-    tr.appendChild(el('td', 'num rej', fmtMoney(r.monto)));
+    tr.appendChild(tdADocsRechazados(r.monto, { chofer: r.cod }));
     tr.appendChild(el('td', 'num', r.pedidos));
     tr.appendChild(pctCell(r.pct, state.cond.umbral));
-    tr.appendChild(el('td', 'muted', '&rsaquo;'));
     tbody.appendChild(tr);
   });
 
   tfoot.innerHTML = '';
   const trT = el('tr');
   trT.appendChild(el('td', null, 'Total general'));
-  trT.appendChild(el('td', 'num', fmtMoney(totals.facturado)));
-  trT.appendChild(el('td', 'num', fmtMoney(totals.ventaReal)));
-  trT.appendChild(el('td', 'num rej', fmtMoney(totals.monto)));
+  trT.appendChild(tdAVentas('num', totals.facturado, 'facturado', 'Todos los choferes', () => true));
+  trT.appendChild(tdAVentas('num', totals.ventaReal, 'real', 'Todos los choferes', () => true));
+  trT.appendChild(tdADocsRechazados(totals.monto, {}));
   trT.appendChild(el('td', 'num', totals.pedidos));
   trT.appendChild(pctCell(totalPct, state.cond.umbral));
-  trT.appendChild(el('td'));
   tfoot.appendChild(trT);
 
 }
@@ -949,33 +953,29 @@ function renderVendedor() {
     <th style="text-align:right">Monto rech.</th>
     <th style="text-align:right">Pedidos</th>
     <th style="text-align:center">% Rechazo</th>
-    <th style="width:20px"></th>
   </tr>`;
 
   tbody.innerHTML = '';
   rows.forEach(v => {
-    const tr = el('tr', 'clickable');
-    tr.addEventListener('click', () => goToDocs({ vendedor: v.cod }));
+    const tr = el('tr');
     const nombre = v.cod === 'OFICINA' ? 'Vendedor Oficina' : VENDOR_NAMES[v.cod];
     tr.appendChild(el('td', null, nombre ? `${nombre}${v.cod === 'OFICINA' ? '' : `<div class="sub">Vendedor ${v.cod}</div>`}` : `Vendedor ${v.cod}<div class="sub" style="font-style:italic">nombre pendiente</div>`));
     tr.appendChild(tdAVentas('num', v.facturado, 'facturado', vendedorLabel(v.cod), row => vendedorKey(row) === v.cod));
     tr.appendChild(tdAVentas('num muted', v.ventaReal, 'real', vendedorLabel(v.cod), row => vendedorKey(row) === v.cod));
-    tr.appendChild(el('td', 'num rej', fmtMoney(v.monto)));
+    tr.appendChild(tdADocsRechazados(v.monto, { vendedor: v.cod }));
     tr.appendChild(el('td', 'num', v.pedidos));
     tr.appendChild(pctCell(v.pct, state.vend.umbral));
-    tr.appendChild(el('td', 'muted', '&rsaquo;'));
     tbody.appendChild(tr);
   });
 
   tfoot.innerHTML = '';
   const trT = el('tr');
   trT.appendChild(el('td', null, 'Total general'));
-  trT.appendChild(el('td', 'num', fmtMoney(totals.facturado)));
-  trT.appendChild(el('td', 'num', fmtMoney(totals.ventaReal)));
-  trT.appendChild(el('td', 'num rej', fmtMoney(totals.monto)));
+  trT.appendChild(tdAVentas('num', totals.facturado, 'facturado', 'Todos los vendedores', () => true));
+  trT.appendChild(tdAVentas('num', totals.ventaReal, 'real', 'Todos los vendedores', () => true));
+  trT.appendChild(tdADocsRechazados(totals.monto, {}));
   trT.appendChild(el('td', 'num', totals.pedidos));
   trT.appendChild(pctCell(totalPct, state.vend.umbral));
-  trT.appendChild(el('td'));
   tfoot.appendChild(trT);
 
 }
