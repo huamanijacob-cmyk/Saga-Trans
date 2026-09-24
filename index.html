@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel de Rechazos · Saga Trans Confitería</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=17">
-<link rel="stylesheet" href="css/ventas.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=19">
+<link rel="stylesheet" href="css/ventas.css?v=5">
 </head>
 <body>
 
@@ -187,6 +187,17 @@
           </div>
           <div class="no-print toolbar">
             <input type="text" id="vendSearch" placeholder="Buscar vendedor o código...">
+            <div class="alert-group">
+              <button class="alert-btn" id="vendAlertToggle">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C1432B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+                <span id="vendAlertLabel">Solo alertas ≥2%</span>
+              </button>
+              <div class="umbral-box">
+                <label>umbral</label>
+                <input type="number" id="vendUmbral" value="2" min="0" max="100" step="0.5">
+                <span>%</span>
+              </div>
+            </div>
           </div>
           <div id="printArea-vendedor">
             <div class="print-title">
@@ -548,9 +559,9 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="js/config.js?v=4"></script>
-  <script src="js/app.js?v=37"></script>
+  <script src="js/app.js?v=38"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="js/ventas-calc.js?v=3"></script>
-  <script src="js/ventas.js?v=5"></script>
+  <script src="js/ventas-calc.js?v=6"></script>
+  <script src="js/ventas.js?v=8"></script>
 </body>
 </html>
