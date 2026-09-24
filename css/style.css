@@ -325,3 +325,11 @@ th button:hover{color:var(--red);}
 #loginForm{text-align:left;}
 .login-version{margin-top:18px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);}
 .rail-logo-st{background:transparent;width:44px;height:44px;}
+
+/* ---------- v1.0: menú lateral más ancho y fijo · nombre del usuario ---------- */
+.rail{width:92px;position:sticky;top:0;height:100vh;align-self:flex-start;overflow-y:auto;}
+.rail-item{width:70px;}
+.rail-label{font-size:10px;}
+.account-email{font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:500;color:var(--ink);max-width:220px;}
+@media (max-width:900px){ .rail{width:60px;} .rail-item{width:48px;} }
+@media (max-width:560px){ .rail{width:52px;} .rail-item{width:44px;} }

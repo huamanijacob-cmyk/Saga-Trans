@@ -101,3 +101,13 @@
 .v-down{color:var(--red);}
 @media print{.v-chart-box{height:300px;}}
 .v-table td:nth-child(2){white-space:nowrap;}
+
+/* Recuadros Teórico · Días hábiles · Días faltantes */
+.v-dias{display:grid;grid-template-columns:repeat(3,minmax(130px,1fr));gap:12px;flex:1;max-width:620px;}
+.v-dia{background:#FFFFFF;border:1px solid var(--card-border);border-top:4px solid var(--navy);border-radius:12px;padding:12px 16px;}
+.v-dia-brand{border-top-color:var(--brand);}
+.v-dia-soft{border-top-color:var(--brand-soft);}
+.v-dia-val{margin-top:4px;font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:500;color:var(--ink);white-space:nowrap;}
+.v-ext{justify-content:space-between;background:#EEF2F9;border-color:#C9D6EC;color:var(--navy);}
+.v-volver{height:32px;}
+@media (max-width:700px){ .v-dias{grid-template-columns:1fr 1fr 1fr;gap:8px;} .v-dia{padding:10px;} .v-dia-val{font-size:17px;} }
