@@ -16,3 +16,15 @@ function nombreDesdeCorreo(email) {
   const iniciales = (partes.length > 1 ? partes[0].charAt(0) + partes[partes.length - 1].charAt(0) : (partes[0] || '?').charAt(0)).toUpperCase();
   return { nombre, iniciales };
 }
+
+// Muestra un módulo del panel y oculta los demás (Rechazos, Ventas, NC…).
+// Cada módulo es un <div class="wrap" id="mod{Nombre}"> y su botón del menú es #rail{Nombre}.
+const MODULOS_PANEL = ['Rechazos', 'Ventas', 'NC'];
+function activarModulo(nombre) {
+  MODULOS_PANEL.forEach(m => {
+    const mod = document.getElementById('mod' + m), rail = document.getElementById('rail' + m);
+    if (mod) mod.style.display = m === nombre ? '' : 'none';
+    if (rail) rail.classList.toggle('rail-active', m === nombre);
+  });
+  window.scrollTo(0, 0);
+}

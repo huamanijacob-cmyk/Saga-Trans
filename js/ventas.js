@@ -641,11 +641,7 @@
     if (tab === 'documentos' && VD) dibujarDocs();
   }
   async function mostrarModulo(nombre) {
-    $('modRechazos').style.display = nombre === 'rechazos' ? '' : 'none';
-    $('modVentas').style.display = nombre === 'ventas' ? '' : 'none';
-    $('railRechazos').classList.toggle('rail-active', nombre === 'rechazos');
-    $('railVentas').classList.toggle('rail-active', nombre === 'ventas');
-    window.scrollTo(0, 0);
+    activarModulo(nombre === 'ventas' ? 'Ventas' : 'Rechazos');
     if (nombre !== 'ventas') return;
     const { data } = await supabaseClient.auth.getSession();
     const email = data?.session?.user?.email || '';
