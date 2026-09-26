@@ -200,6 +200,7 @@
       else if (!x && !fac[a.doc]) { a.estado = 'facanulada'; a.auto = true; }   // la factura ya no está en Ventas: se anuló
       else if (!x) { a.estado = dev ? 'rechazo' : 'falta'; a.auto = dev; }
       else if (iguales) a.estado = 'coincide';
+      else if (Math.abs((a.nmonto + a.smonto) - (x.N + x.S)) <= 0.05) a.estado = 'reparto';   // mismo total, distinto quién asume
       else { a.estado = dev ? 'parcial' : 'distinto'; a.auto = dev; }
     });
 
@@ -288,7 +289,7 @@
       pctN: d.venta ? d.Ns / d.venta : null, pctS: d.venta ? d.Ss / d.venta : null, pctT: d.venta ? (d.Ns + d.Ss) / d.venta : null,
     })).sort((a, b) => b.fecha.localeCompare(a.fecha) || a.factura.localeCompare(b.factura));
 
-    return { tot, curva, diario: Object.values(diario).sort((a, b) => a.fecha.localeCompare(b.fecha)), series, anuladas: anu, concil, productos, documentos, vigentes: vig };
+    return { tot, curva, diario: Object.values(diario).sort((a, b) => a.fecha.localeCompare(b.fecha)), series, anuladas: anu, concil, productos, documentos, vigentes: vig, facturas: fac, alexPorDoc: alexKey };
   }
 
   // Montos de NC vigentes que todavía no están en el registro (para recordarlos si luego se anulan).

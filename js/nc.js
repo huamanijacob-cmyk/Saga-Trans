@@ -20,7 +20,7 @@
   const MES_ABBR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic'];
   const MES_NOMBRE = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
   const CLASE = { rechazo: 'Rechazo', parcial: 'Parcial', error: 'Error' };
-  const ESTADO = { coincide: 'Coincide', distinto: 'Monto distinto', rechazo: 'Rechazo', parcial: 'Parcial', facanulada: 'Factura anulada', falta: 'Falta emitir NC', sinalex: 'NC sin Alex' };
+  const ESTADO = { coincide: 'Coincide', distinto: 'Monto distinto', reparto: 'Reparto distinto', rechazo: 'Rechazo', parcial: 'Parcial', facanulada: 'Factura anulada', falta: 'Falta emitir NC', sinalex: 'NC sin Alex' };
   const GRUPO = { regular: 'Regular', adicional: 'Adicional', paneton: 'Panetón' };
 
   const st = {
@@ -28,6 +28,7 @@
     anu: { filtro: 'todas', page: 0, cambios: {} },
     con: { filtro: 'pend', page: 0 },
     doc: { buscar: '', grupo: 'all', page: 0, sel: new Set() },
+    det: null,
     correo: {}, correoS: {},
   };
   let D = null, R = null, CHART = null;
@@ -126,6 +127,7 @@
     if (st.modo === 'dia') st.corte = st.diaSel.replace(/-/g, '/');
     else { const fs = C.fechasNC(D.nc); const [y, m] = ym.split('-').map(Number); st.corte = fs.length ? fs[fs.length - 1] : `${y}/${pad(m)}/${pad(new Date(y, m, 0).getDate())}`; }
     st.anu.page = st.con.page = st.doc.page = 0; st.anu.cambios = {}; st.correo = {}; st.correoS = {}; st.doc.sel.clear();
+    if (st.det) quitarDetalle();
     calcular(); renderTodo();
   }
 
@@ -194,16 +196,17 @@
     const per = CFG.POR_PAG, max = Math.max(0, Math.ceil(lista.length / per) - 1); st.anu.page = Math.min(st.anu.page, max);
     $('ncAnuPage').textContent = `${st.anu.page + 1} / ${max + 1}`; $('ncAnuPrev').disabled = st.anu.page === 0; $('ncAnuNext').disabled = st.anu.page === max;
     const tb = $('ncAnuTable');
-    tb.querySelector('thead').innerHTML = '<tr><th class="c">Nota de crédito</th><th class="c">Emisión</th><th class="c">Anulada</th><th class="c">Cliente</th><th class="c">Asume</th><th class="r">Monto</th><th class="c">Origen</th><th class="c">Clasificación</th></tr>';
+    tb.querySelector('thead').innerHTML = '<tr><th class="c">Nota de crédito</th><th class="c">Factura</th><th class="c">Emisión</th><th class="c">Anulada</th><th class="c">Cliente</th><th class="c">Asume</th><th class="r">Monto</th><th class="c">Origen</th><th class="c">Clasificación</th></tr>';
     const ORIG = { alex: 'Alex', registro: 'Registro', manual: 'Manual', '': '—' };
     tb.querySelector('tbody').innerHTML = lista.slice(st.anu.page * per, st.anu.page * per + per).map(a => {
       const cam = st.anu.cambios[a.doc] || {};
       const clase = cam.tipo || a.clase; const m = cam.monto !== undefined ? cam.monto : a.montoAnulada;
-      return `<tr><td class="mono c">${esc(a.doc)}</td><td class="mono c">${fD(a.fecha).slice(0, 5)}</td><td class="mono c">${esc(a.fecanu ? fD(a.fecanu).slice(0, 5) : '—')}</td><td class="mono c">${esc(a.codcli)}</td><td class="c">${a.cargo === 'N' ? 'Nestlé' : 'ST'}</td>
+      const fa = facturaDeAnulada(a);
+      return `<tr class="${fa && st.det === fa ? 'nc-abierta' : ''}"><td class="mono c">${esc(a.doc)}</td>${fa ? linkFactura(fa) : '<td class="c muted">—</td>'}<td class="mono c">${fD(a.fecha).slice(0, 5)}</td><td class="mono c">${esc(a.fecanu ? fD(a.fecanu).slice(0, 5) : '—')}</td><td class="mono c">${esc(a.codcli)}</td><td class="c">${a.cargo === 'N' ? 'Nestlé' : 'ST'}</td>
         <td class="num">${clase === 'error' ? '—' : `<input class="nc-inp ${cam.monto !== undefined ? 'dirty' : ''}" type="number" step="0.01" data-doc="${esc(a.doc)}" value="${m}">`}</td>
         <td class="c nc-origen">${ORIG[a.origen] || '—'}</td>
         <td class="c"><select class="nc-sel ${cam.tipo ? 'dirty' : ''}" data-doc="${esc(a.doc)}">${Object.entries(CLASE).map(([k, v]) => `<option value="${k}" ${k === clase ? 'selected' : ''}>${v}</option>`).join('')}</select></td></tr>`;
-    }).join('') || '<tr><td class="muted" colspan="8">No hay notas anuladas en este filtro.</td></tr>';
+    }).join('') || '<tr><td class="muted" colspan="9">No hay notas anuladas en este filtro.</td></tr>';
     $('ncAnuGuardar').style.display = Object.keys(st.anu.cambios).length ? '' : 'none';
   }
 
@@ -213,7 +216,7 @@
     $('ncConcilBox').style.display = c ? '' : 'none';
     if (!c) return;
     const n = k => c.cuenta[k] || 0;
-    const defs = [['coincide', 'Coinciden', 'green', n('coincide')], ['distinto', 'Monto distinto', 'amber', n('distinto')], ['rechparc', 'Rechazo / parcial', 'red', n('rechazo') + n('parcial') + n('facanulada')], ['falta', 'Falta emitir NC', 'navy', n('falta')], ['sinalex', 'NC sin Alex', 'teal', n('sinalex')]];
+    const defs = [['coincide', 'Coinciden', 'green', n('coincide')], ['distinto', 'Monto distinto', 'red', n('distinto')], ['reparto', 'Reparto distinto', 'amber', n('reparto')], ['rechparc', 'Rechazo / parcial', 'red', n('rechazo') + n('parcial') + n('facanulada')], ['falta', 'Falta emitir NC', 'navy', n('falta')], ['sinalex', 'NC sin Alex', 'teal', n('sinalex')]];
     $('ncConKpis').innerHTML = defs.map(([k, l, col, v]) => `<div class="kpi kpi-${col} ${st.con.filtro === k ? 'on' : ''}" data-cf="${k}"><div class="kpi-label">${l}</div><div class="kpi-val">${fN(v)}</div></div>`).join('');
     const filtro = st.con.filtro;
     const lista = c.filas.filter(f => filtro === 'pend' ? f.estado !== 'coincide' : filtro === 'rechparc' ? (f.estado === 'rechazo' || f.estado === 'parcial' || f.estado === 'facanulada') : f.estado === filtro)
@@ -224,7 +227,7 @@
     const tb = $('ncConTable');
     tb.querySelector('thead').innerHTML = '<tr><th class="c">Fecha</th><th class="c">Factura</th><th class="c">Cliente</th><th>Razón social</th><th class="r">Alex Nestlé</th><th class="r">Sistema Nestlé</th><th class="r">Dif.</th><th class="r">Alex ST</th><th class="r">Sistema ST</th><th class="r">Dif.</th><th class="c">Resultado</th></tr>';
     const dif = v => (Math.abs(v) <= 0.05 ? '<span class="muted">0.00</span>' : `<span class="${v < 0 ? 'rej' : ''}">${f2(v)}</span>`);
-    tb.querySelector('tbody').innerHTML = lista.slice(st.con.page * per, st.con.page * per + per).map(f => `<tr><td class="mono c">${fD(f.fecha).slice(0, 5)}</td><td class="mono c" title="${esc(f.ncs.join(' · '))}">${esc(f.doc)}</td><td class="mono c">${esc(f.cli)}</td><td>${esc(f.razon)}</td>
+    tb.querySelector('tbody').innerHTML = lista.slice(st.con.page * per, st.con.page * per + per).map(f => `<tr class="${st.det === f.doc ? 'nc-abierta' : ''}"><td class="mono c">${fD(f.fecha).slice(0, 5)}</td>${linkFactura(f.doc)}<td class="mono c">${esc(f.cli)}</td><td>${esc(f.razon)}</td>
       <td class="num">${f2(f.alexN)}</td><td class="num">${f2(f.sisN)}</td><td class="num">${dif(f.dN)}</td><td class="num">${f2(f.alexS)}</td><td class="num">${f2(f.sisS)}</td><td class="num">${dif(f.dS)}</td><td class="c">${chip(f.estado === 'facanulada' ? 'rechazo' : f.estado, ESTADO[f.estado] + (f.auto ? ' · auto' : ''))}</td></tr>`).join('')
       || '<tr><td class="muted" colspan="11">Nada que revisar en este filtro.</td></tr>';
     // Sr. Alex
@@ -277,7 +280,7 @@
     const tb = $('ncDocTable');
     const todos = pag.length && pag.every(d => st.doc.sel.has(d.factura));
     tb.querySelector('thead').innerHTML = `<tr><th class="c"><input type="checkbox" id="ncSelPag" ${todos ? 'checked' : ''} aria-label="Seleccionar página"></th><th class="c">Fecha</th><th class="c">Factura</th><th class="c">Cliente</th><th>Razón social</th><th class="r">Monto c/IGV</th><th class="c">% Nestlé</th><th class="c">% ST</th><th class="c">% Total</th><th class="c">Notas de crédito</th><th>Producto</th><th class="c">Grupo</th></tr>`;
-    tb.querySelector('tbody').innerHTML = pag.map(d => `<tr><td class="c"><input type="checkbox" data-sel="${esc(d.factura)}" ${st.doc.sel.has(d.factura) ? 'checked' : ''} aria-label="Seleccionar ${esc(d.factura)}"></td><td class="mono c">${fD(d.fecha).slice(0, 5)}</td><td class="mono c">${esc(d.factura)}</td><td class="mono c">${esc(d.cli)}</td><td>${esc(d.cliente)}</td>
+    tb.querySelector('tbody').innerHTML = pag.map(d => `<tr class="${st.det === d.factura ? 'nc-abierta' : ''}"><td class="c"><input type="checkbox" data-sel="${esc(d.factura)}" ${st.doc.sel.has(d.factura) ? 'checked' : ''} aria-label="Seleccionar ${esc(d.factura)}"></td><td class="mono c">${fD(d.fecha).slice(0, 5)}</td>${linkFactura(d.factura)}<td class="mono c">${esc(d.cli)}</td><td>${esc(d.cliente)}</td>
       <td class="num">${f2(d.ventaIgv)}</td><td class="num c">${fP1(d.pctN)}</td><td class="num c">${fP1(d.pctS)}</td><td class="num c">${fP1(d.pctT)}</td><td class="mono c" style="font-size:12px;">${esc(d.ncs.join(' · '))}</td><td>${esc(d.producto)}</td><td class="c">${chip(d.grupo, d.etiqueta || GRUPO[d.grupo])}</td></tr>`).join('')
       || '<tr><td class="muted" colspan="12">Sin documentos para este filtro.</td></tr>';
     const s = lista.reduce((a, d) => ({ v: a.v + d.ventaIgv, N: a.N + d.N, S: a.S + d.S }), { v: 0, N: 0, S: 0 });
@@ -288,6 +291,52 @@
       <span style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><input type="text" id="ncEtiqueta" class="input-select" placeholder="Etiqueta (ej. Sagastegui julio)" style="width:220px;">
       <button class="v-meta-save" id="ncMarcarAdi">Marcar como Adicional</button><button class="export-btn" id="ncMarcarReg">Marcar como Regular</button>
       <button class="export-btn" id="ncSelCliente">Todas las de este cliente</button><button class="clear-btn" id="ncSelLimpiar">Quitar selección</button></span>`;
+  }
+
+  // ---------------- Detalle de factura (clic en el número) ----------------
+  const linkFactura = doc => `<td class="mono c clickable" data-det="${esc(doc)}" title="Ver notas de crédito de la factura"><span class="r-link">${esc(doc)}</span></td>`;
+  const facturaDeAnulada = a => a.refDocRegistro || (a.alexCand && a.alexCand.doc) || '';
+  function ncsDeFactura(doc) {
+    const vig = R.vigentes.filter(r => r.refDoc === doc).map(r => ({ ...r, estadoTxt: 'vigente', montoRef: r.mondoc, subRef: r.presub }));
+    const anu = R.anuladas.filter(a => facturaDeAnulada(a) === doc).map(a => ({ ...a, estadoTxt: 'anulada', montoRef: a.montoAnulada, subRef: a.montoAnulada / C.IGV }));
+    return [...vig, ...anu].sort((x, y) => x.fecha.localeCompare(y.fecha) || x.doc.localeCompare(y.doc));
+  }
+  function abrirDetalle(doc, anclaCard) {
+    st.det = doc;
+    const f = R.facturas[doc], a = R.alexPorDoc[doc], ncs = ncsDeFactura(doc);
+    const venta = f ? f.venta : 0, ventaIgv = venta * C.IGV;
+    const vig = ncs.filter(n => n.estadoTxt === 'vigente');
+    const sum = (c, k) => vig.filter(n => n.cargo === c).reduce((s, n) => s + n[k], 0);
+    const sN = sum('N', 'presub'), sS = sum('S', 'presub'), cN = sum('N', 'mondoc'), cS = sum('S', 'mondoc');
+    const p = v => (venta ? fP1(v / venta) : '—');
+    let box = $('ncDetalle');
+    if (!box) { box = document.createElement('div'); box.id = 'ncDetalle'; box.className = 'card nc-det'; }
+    anclaCard.after(box);   // justo debajo de la tabla donde se hizo clic
+    box.innerHTML = `<div class="nc-det-hd"><div class="nc-det-tt">${esc(doc)} · ${esc((f && f.nombre) || (a && a.razon) || '')}</div>
+      <div class="export-group"><button class="export-btn" id="ncDetExcel">Descargar Excel</button><button class="clear-btn" id="ncDetCerrar">Cerrar</button></div></div>
+      <div class="nc-det-g">
+        <div class="nc-det-b"><div class="kpi-label">Factura (Ventas)</div>${f ? `<b>${fD(f.fecha)} · ${fS(ventaIgv)}</b><span>cliente ${esc(f.cli)} · s/IGV ${f2(venta)}</span>` : '<b>No está en Ventas</b><span>la factura se anuló o es de otro mes</span>'}</div>
+        <div class="nc-det-b"><div class="kpi-label">Alex</div>${a ? `<b>${fP1(a.dpct)} · ${fS(a.dmonto)}</b><span>Nestlé ${fP1(a.npct)} (${f2(a.nmonto)}) · ST ${fP1(a.spct)} (${f2(a.smonto)})${a.producto ? ' · ' + esc(a.producto) : ''}${a.obs ? ' · ' + esc(a.obs) : ''}</span>` : '<b>No está en el archivo de Alex</b><span>&nbsp;</span>'}</div>
+        <div class="nc-det-b"><div class="kpi-label">Sistema (NC vigentes)</div><b>${p(sN + sS)} · ${fS(cN + cS)}</b><span>Nestlé ${p(sN)} (${f2(cN)}) · ST ${p(sS)} (${f2(cS)})</span></div>
+      </div>
+      <div class="table-scroll"><table class="v-table"><thead><tr><th class="c">Nota de crédito</th><th class="c">Serie</th><th class="c">Número</th><th class="c">Emisión</th><th class="c">Estado</th><th class="c">Anulada</th><th class="c">Asume</th><th>Motivo</th><th class="r">s/IGV</th><th class="r">c/IGV</th><th class="c">%</th></tr></thead><tbody>
+      ${ncs.map(n => `<tr><td class="mono c">${esc(n.doc)}</td><td class="mono c">${esc(n.sersun)}</td><td class="mono c">${esc(n.numsun)}</td><td class="mono c">${fD(n.fecha)}</td>
+        <td class="c">${chip(n.estadoTxt, n.estadoTxt === 'vigente' ? 'Vigente' : 'Anulada · ' + (CLASE[n.clase] || ''))}</td><td class="mono c">${n.fecanu ? fD(n.fecanu) : '—'}</td>
+        <td class="c">${n.cargo === 'N' ? 'Nestlé' : 'ST'}</td><td>${esc(n.motivo)}</td><td class="num">${f2(n.subRef)}</td><td class="num">${f2(n.montoRef)}</td><td class="num c">${p(n.subRef)}</td></tr>`).join('')
+        || '<tr><td class="muted" colspan="11">No hay notas de crédito emitidas para esta factura.</td></tr>'}
+      </tbody></table></div>`;
+    renderPanelActual();
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function quitarDetalle() { st.det = null; const b = $('ncDetalle'); if (b) b.remove(); }
+  function cerrarDetalle() { quitarDetalle(); renderPanelActual(); }
+  function renderPanelActual() { if (st.tab === 'concil') renderConcil(); else if (st.tab === 'documentos') renderDocs(); else if (st.tab === 'anuladas') renderAnuladas(); }
+  function exportDetalle() {
+    const doc = st.det; if (!doc) return;
+    const f = R.facturas[doc], ncs = ncsDeFactura(doc), venta = f ? f.venta : 0;
+    xlsx(`nc_factura_${doc}.xlsx`, [{ name: 'Detalle', title: `NOTAS DE CRÉDITO · Factura ${doc}`, subtitle: `${(f && f.nombre) || ''} · ${f ? fD(f.fecha) + ' · ' + fS(venta * C.IGV) : 'no está en Ventas'}`,
+      columns: [{ header: 'Nota de crédito', width: 18, code: true }, { header: 'Serie', code: true }, { header: 'Número', code: true }, { header: 'Emisión', width: 12 }, { header: 'Estado', width: 18 }, { header: 'Anulada', width: 12 }, { header: 'Asume' }, { header: 'Motivo', width: 28 }, { header: 's/IGV', fmt: M2 }, { header: 'c/IGV', fmt: M2 }, { header: '%', fmt: PCT }],
+      rows: ncs.map(n => [n.doc, n.sersun, n.numsun, fD(n.fecha), n.estadoTxt === 'vigente' ? 'Vigente' : 'Anulada · ' + (CLASE[n.clase] || ''), n.fecanu ? fD(n.fecanu) : '', n.cargo === 'N' ? 'Nestlé' : 'ST', n.motivo, n.subRef, n.montoRef, venta ? n.subRef / venta : '']) }]);
   }
 
   // ---------------- Guardar marcas y ajustes ----------------
@@ -411,6 +460,7 @@
 
   // ---------------- Pestañas, módulo y eventos ----------------
   function setTab(tab) {
+    if (st.tab !== tab && st.det) quitarDetalle();
     st.tab = tab;
     document.querySelectorAll('#ncTabs .tab-btn').forEach(b => b.classList.toggle('tab-active', b.dataset.nctab === tab));
     ['resumen', 'diario', 'anuladas', 'concil', 'producto', 'ajustes', 'documentos'].forEach(t => { $('ncpanel-' + t).style.display = t === tab ? '' : 'none'; });
@@ -509,6 +559,13 @@
       if (e.target.id === 'ncSelCliente') { const clis = new Set(R.documentos.filter(d => st.doc.sel.has(d.factura)).map(d => d.cli)); R.documentos.filter(d => clis.has(d.cli)).forEach(d => st.doc.sel.add(d.factura)); renderDocs(); }
     });
     $('ncExportDocs').addEventListener('click', () => xlsx(`nc_documentos_${fileTag()}.xlsx`, [hojaDocs()]));
+    // Detalle de factura: clic en el número (Conciliación, Documentos, Anuladas)
+    $('modNC').addEventListener('click', e => {
+      const td = e.target.closest('td[data-det]');
+      if (td && !td.closest('#ncDetalle')) { abrirDetalle(td.dataset.det, td.closest('.card')); return; }
+      if (e.target.id === 'ncDetCerrar') cerrarDetalle();
+      if (e.target.id === 'ncDetExcel') exportDetalle();
+    });
   }
   wire();
 })();
