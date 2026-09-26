@@ -20,7 +20,7 @@
   const MES_ABBR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic'];
   const MES_NOMBRE = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
   const CLASE = { rechazo: 'Rechazo', parcial: 'Parcial', error: 'Error' };
-  const ESTADO = { coincide: 'Coincide', distinto: 'Monto distinto', rechazo: 'Rechazo', parcial: 'Parcial', falta: 'Falta emitir NC', sinalex: 'NC sin Alex' };
+  const ESTADO = { coincide: 'Coincide', distinto: 'Monto distinto', rechazo: 'Rechazo', parcial: 'Parcial', facanulada: 'Factura anulada', falta: 'Falta emitir NC', sinalex: 'NC sin Alex' };
   const GRUPO = { regular: 'Regular', adicional: 'Adicional', paneton: 'Panetón' };
 
   const st = {
@@ -28,7 +28,7 @@
     anu: { filtro: 'todas', page: 0, cambios: {} },
     con: { filtro: 'pend', page: 0 },
     doc: { buscar: '', grupo: 'all', page: 0, sel: new Set() },
-    correo: {},
+    correo: {}, correoS: {},
   };
   let D = null, R = null, CHART = null;
   window.NCMOD = { state: st, get data() { return D; }, get res() { return R; } };
@@ -125,7 +125,7 @@
     st.ym = ym;
     if (st.modo === 'dia') st.corte = st.diaSel.replace(/-/g, '/');
     else { const fs = C.fechasNC(D.nc); const [y, m] = ym.split('-').map(Number); st.corte = fs.length ? fs[fs.length - 1] : `${y}/${pad(m)}/${pad(new Date(y, m, 0).getDate())}`; }
-    st.anu.page = st.con.page = st.doc.page = 0; st.anu.cambios = {}; st.correo = {}; st.doc.sel.clear();
+    st.anu.page = st.con.page = st.doc.page = 0; st.anu.cambios = {}; st.correo = {}; st.correoS = {}; st.doc.sel.clear();
     calcular(); renderTodo();
   }
 
@@ -213,31 +213,34 @@
     $('ncConcilBox').style.display = c ? '' : 'none';
     if (!c) return;
     const n = k => c.cuenta[k] || 0;
-    const defs = [['coincide', 'Coinciden', 'green', n('coincide')], ['distinto', 'Monto distinto', 'amber', n('distinto')], ['rechparc', 'Rechazo / parcial', 'red', n('rechazo') + n('parcial')], ['falta', 'Falta emitir NC', 'navy', n('falta')], ['sinalex', 'NC sin Alex', 'teal', n('sinalex')]];
+    const defs = [['coincide', 'Coinciden', 'green', n('coincide')], ['distinto', 'Monto distinto', 'amber', n('distinto')], ['rechparc', 'Rechazo / parcial', 'red', n('rechazo') + n('parcial') + n('facanulada')], ['falta', 'Falta emitir NC', 'navy', n('falta')], ['sinalex', 'NC sin Alex', 'teal', n('sinalex')]];
     $('ncConKpis').innerHTML = defs.map(([k, l, col, v]) => `<div class="kpi kpi-${col} ${st.con.filtro === k ? 'on' : ''}" data-cf="${k}"><div class="kpi-label">${l}</div><div class="kpi-val">${fN(v)}</div></div>`).join('');
     const filtro = st.con.filtro;
-    const lista = c.filas.filter(f => filtro === 'pend' ? f.estado !== 'coincide' : filtro === 'rechparc' ? (f.estado === 'rechazo' || f.estado === 'parcial') : f.estado === filtro)
+    const lista = c.filas.filter(f => filtro === 'pend' ? f.estado !== 'coincide' : filtro === 'rechparc' ? (f.estado === 'rechazo' || f.estado === 'parcial' || f.estado === 'facanulada') : f.estado === filtro)
       .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.doc.localeCompare(b.doc));
-    $('ncConTitulo').textContent = filtro === 'pend' ? `Por revisar · ${fN(lista.length)} facturas` : `${defs.find(d => d[0] === filtro)?.[1] || ''} · ${fN(lista.length)} facturas`;
+    $('ncConTitulo').textContent = (c.finAlex ? `Alex hasta el ${fD(c.finAlex).slice(0, 5)} · ` : '') + (filtro === 'pend' ? `Por revisar · ${fN(lista.length)} facturas` : `${defs.find(d => d[0] === filtro)?.[1] || ''} · ${fN(lista.length)} facturas`);
     const per = CFG.POR_PAG, max = Math.max(0, Math.ceil(lista.length / per) - 1); st.con.page = Math.min(st.con.page, max);
     $('ncConPage').textContent = `${st.con.page + 1} / ${max + 1}`; $('ncConPrev').disabled = st.con.page === 0; $('ncConNext').disabled = st.con.page === max;
     const tb = $('ncConTable');
     tb.querySelector('thead').innerHTML = '<tr><th class="c">Fecha</th><th class="c">Factura</th><th class="c">Cliente</th><th>Razón social</th><th class="r">Alex Nestlé</th><th class="r">Sistema Nestlé</th><th class="r">Dif.</th><th class="r">Alex ST</th><th class="r">Sistema ST</th><th class="r">Dif.</th><th class="c">Resultado</th></tr>';
     const dif = v => (Math.abs(v) <= 0.05 ? '<span class="muted">0.00</span>' : `<span class="${v < 0 ? 'rej' : ''}">${f2(v)}</span>`);
     tb.querySelector('tbody').innerHTML = lista.slice(st.con.page * per, st.con.page * per + per).map(f => `<tr><td class="mono c">${fD(f.fecha).slice(0, 5)}</td><td class="mono c" title="${esc(f.ncs.join(' · '))}">${esc(f.doc)}</td><td class="mono c">${esc(f.cli)}</td><td>${esc(f.razon)}</td>
-      <td class="num">${f2(f.alexN)}</td><td class="num">${f2(f.sisN)}</td><td class="num">${dif(f.dN)}</td><td class="num">${f2(f.alexS)}</td><td class="num">${f2(f.sisS)}</td><td class="num">${dif(f.dS)}</td><td class="c">${chip(f.estado, ESTADO[f.estado])}</td></tr>`).join('')
+      <td class="num">${f2(f.alexN)}</td><td class="num">${f2(f.sisN)}</td><td class="num">${dif(f.dN)}</td><td class="num">${f2(f.alexS)}</td><td class="num">${f2(f.sisS)}</td><td class="num">${dif(f.dS)}</td><td class="c">${chip(f.estado === 'facanulada' ? 'rechazo' : f.estado, ESTADO[f.estado] + (f.auto ? ' · auto' : ''))}</td></tr>`).join('')
       || '<tr><td class="muted" colspan="11">Nada que revisar en este filtro.</td></tr>';
     // Sr. Alex
     const ta = $('ncSrAlexTable');
-    ta.querySelector('thead').innerHTML = '<tr><th class="c">Fecha</th><th class="r">Nestlé diario (Alex)</th><th class="r">Acumulado</th><th class="r">Informa correo</th><th class="r">Diferencia</th></tr>';
-    ta.querySelector('tbody').innerHTML = c.srAlex.map(r => {
-      const val = st.correo[r.fecha] !== undefined ? st.correo[r.fecha] : (r.correo ?? '');
-      const d = val === '' || val === null ? null : Math.round((Number(val) - r.acumulado) * 100) / 100;
-      return `<tr><td class="mono c">${fD(r.fecha)}</td><td class="num">${f2(r.diario)}</td><td class="num">${f2(r.acumulado)}</td>
-        <td class="num"><input class="nc-inp ${st.correo[r.fecha] !== undefined ? 'dirty' : ''}" type="number" step="0.01" data-correo="${r.fecha}" value="${val}"></td>
-        <td class="num">${d === null ? '—' : (Math.abs(d) <= 0.05 ? chip('coincide', '0.00') : `<span class="rej">${f2(d)}</span>`)}</td></tr>`;
-    }).join('');
-    $('ncCorreoGuardar').style.display = Object.keys(st.correo).length ? '' : 'none';
+    ta.querySelector('thead').innerHTML = '<tr class="v-grp"><th></th><th colspan="4" class="v-grp-sep">Nestlé</th><th colspan="4" class="v-grp-sep">ST</th></tr>'
+      + '<tr><th class="c">Fecha</th><th class="r">Diario (Alex)</th><th class="r">Acumulado</th><th class="c">Informa correo</th><th class="r">Diferencia</th><th class="r">Diario (Alex)</th><th class="r">Acumulado</th><th class="c">Informa correo</th><th class="r">Diferencia</th></tr>';
+    const celdas = (fecha, acum, guardado, pend, attr) => {
+      const val = pend[fecha] !== undefined ? pend[fecha] : (guardado ?? '');
+      const d = val === '' || val === null ? null : Math.round((Number(val) - acum) * 100) / 100;
+      return `<td class="c"><input class="nc-inp ${pend[fecha] !== undefined ? 'dirty' : ''}" type="number" step="0.01" ${attr}="${fecha}" value="${val}"></td>
+        <td class="num">${d === null ? '—' : (Math.abs(d) <= 0.05 ? chip('coincide', '0.00') : `<span class="rej">${f2(d)}</span>`)}</td>`;
+    };
+    ta.querySelector('tbody').innerHTML = c.srAlex.map(r => `<tr><td class="mono c">${fD(r.fecha)}</td>
+      <td class="num">${f2(r.diario)}</td><td class="num">${f2(r.acumulado)}</td>${celdas(r.fecha, r.acumulado, r.correo, st.correo, 'data-correo')}
+      <td class="num">${f2(r.diarioS)}</td><td class="num">${f2(r.acumuladoS)}</td>${celdas(r.fecha, r.acumuladoS, r.correoS, st.correoS, 'data-correos')}</tr>`).join('');
+    $('ncCorreoGuardar').style.display = Object.keys(st.correo).length || Object.keys(st.correoS).length ? '' : 'none';
   }
 
   function renderProducto() {
@@ -462,8 +465,18 @@
     $('ncConPrev').addEventListener('click', () => { st.con.page = Math.max(0, st.con.page - 1); renderConcil(); });
     $('ncConNext').addEventListener('click', () => { st.con.page++; renderConcil(); });
     $('ncExportConcil').addEventListener('click', () => { const h = hojaConcil(false); if (h) xlsx(`nc_conciliacion_alex_${fileTag()}.xlsx`, [h]); });
-    $('ncSrAlexTable').addEventListener('change', e => { const f = e.target.dataset.correo; if (f) { st.correo[f] = e.target.value === '' ? '' : parseFloat(e.target.value); renderConcil(); } });
-    $('ncCorreoGuardar').addEventListener('click', async () => { Object.assign(D.ajustes.correo, st.correo); st.correo = {}; await guardarAjustes('Guardando montos del correo...'); });
+    $('ncSrAlexTable').addEventListener('change', e => {
+      const v = e.target.value === '' ? '' : parseFloat(e.target.value);
+      if (e.target.dataset.correo) st.correo[e.target.dataset.correo] = v;
+      else if (e.target.dataset.correos) st.correoS[e.target.dataset.correos] = v;
+      else return;
+      renderConcil();
+    });
+    $('ncCorreoGuardar').addEventListener('click', async () => {
+      D.ajustes.correoST = D.ajustes.correoST || {};
+      Object.assign(D.ajustes.correo, st.correo); Object.assign(D.ajustes.correoST, st.correoS);
+      st.correo = {}; st.correoS = {}; await guardarAjustes('Guardando montos del correo...');
+    });
     // Producto
     $('ncExportProd').addEventListener('click', () => xlsx(`nc_productos_${fileTag()}.xlsx`, [hojaProd()]));
     // Ajustes

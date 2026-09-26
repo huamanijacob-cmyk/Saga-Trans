@@ -131,6 +131,7 @@
     const marcas = (ajustes && ajustes.marcas) || {};
     const manuales = (ajustes && ajustes.manuales) || [];
     const correo = (ajustes && ajustes.correo) || {};
+    const correoS = (ajustes && ajustes.correoST) || {};
     const { fac, porNumero, conDevolucion } = indexFacturas(ventas);
     const alexKey = {};
     (alex || []).forEach(a => { a.doc = porNumero[a.key] || `${a.tipo}${a.n}`; alexKey[a.doc] = a; });
@@ -185,8 +186,26 @@
     });
     const series = [...new Set(vig.map(r => r.sersun))].sort((a, b) => (a.charAt(1) + a).localeCompare(b.charAt(1) + b));
 
+    // Estado de cada factura de Alex frente a las NC vigentes. Si Alex no la marcó, igual se detecta
+    // rechazo/parcial porque la factura tuvo devolución (D en Ventas o nota de devolución PDP).
+    nc.filter(r => r.tipped === 'PDP' && r.refDoc).forEach(r => conDevolucion.add(r.refDoc));
+    const sis = {};
+    vig.forEach(r => { if (!r.refDoc) return; const x = (sis[r.refDoc] = sis[r.refDoc] || { N: 0, S: 0, ncs: [] }); x[r.cargo] += r.mondoc; x.ncs.push(r.doc); });
+    (alex || []).forEach(a => {
+      const x = sis[a.doc], dev = conDevolucion.has(a.doc);
+      const iguales = x && Math.abs(a.nmonto - x.N) <= 0.05 && Math.abs(a.smonto - x.S) <= 0.05;
+      a.auto = false;
+      if (a.obs === 'RECHAZO') a.estado = 'rechazo';
+      else if (a.obs === 'PARCIAL') a.estado = 'parcial';
+      else if (!x && !fac[a.doc]) { a.estado = 'facanulada'; a.auto = true; }   // la factura ya no está en Ventas: se anuló
+      else if (!x) { a.estado = dev ? 'rechazo' : 'falta'; a.auto = dev; }
+      else if (iguales) a.estado = 'coincide';
+      else { a.estado = dev ? 'parcial' : 'distinto'; a.auto = dev; }
+    });
+
     // Anuladas: monto y clasificación
-    const alexRech = (alex || []).filter(a => a.obs === 'RECHAZO' || a.obs === 'PARCIAL');
+    const alexRech = (alex || []).filter(a => a.estado === 'rechazo' || a.estado === 'parcial' || a.estado === 'facanulada')
+      .map(a => ({ ...a, obs: a.estado === 'parcial' ? 'PARCIAL' : 'RECHAZO' }));
     const grupos = {};
     anu.forEach(r => { const k = `${r.codcli}|${r.fecha}|${r.cargo}`; (grupos[k] = grupos[k] || []).push(r); });
     Object.entries(grupos).forEach(([k, arr]) => {
@@ -219,31 +238,32 @@
     // Conciliación con Alex (por factura)
     let concil = null;
     if (alex && alex.length) {
-      const sis = {};
-      vig.forEach(r => { if (!r.refDoc) return; const s = (sis[r.refDoc] = sis[r.refDoc] || { N: 0, S: 0, ncs: [] }); s[r.cargo] += r.mondoc; s.ncs.push(r.doc); });
       const filas = []; const vistos = new Set();
+      const finAlex = alex.map(a => a.fecha).sort().slice(-1)[0];   // último día que cubre el archivo de Alex
       alex.filter(a => a.fecha >= desde && a.fecha <= corte).forEach(a => {
         vistos.add(a.doc);
         const s = sis[a.doc];
-        const dN = r2(a.nmonto - (s ? s.N : 0)), dS = r2(a.smonto - (s ? s.S : 0));
-        let estado;
-        if (a.obs === 'RECHAZO' || a.obs === 'PARCIAL') estado = a.obs === 'PARCIAL' ? 'parcial' : 'rechazo';
-        else if (!s) estado = 'falta';
-        else estado = Math.abs(dN) <= 0.05 && Math.abs(dS) <= 0.05 ? 'coincide' : 'distinto';
-        filas.push({ doc: a.doc, fecha: a.fecha, cli: a.cli, razon: a.razon, producto: a.producto, alexN: a.nmonto, alexS: a.smonto, sisN: s ? r2(s.N) : 0, sisS: s ? r2(s.S) : 0, dN, dS, estado, ncs: s ? s.ncs : [] });
+        filas.push({ doc: a.doc, fecha: a.fecha, cli: a.cli, razon: a.razon, producto: a.producto, alexN: a.nmonto, alexS: a.smonto, sisN: s ? r2(s.N) : 0, sisS: s ? r2(s.S) : 0, dN: r2(a.nmonto - (s ? s.N : 0)), dS: r2(a.smonto - (s ? s.S : 0)), estado: a.estado, auto: a.auto, ncs: s ? s.ncs : [] });
       });
       Object.entries(sis).forEach(([doc, s]) => {
         if (vistos.has(doc)) return;
         const f = fac[doc];
-        filas.push({ doc, fecha: f ? f.fecha : '', cli: f ? f.cli : '', razon: f ? f.nombre : '', producto: '', alexN: 0, alexS: 0, sisN: r2(s.N), sisS: r2(s.S), dN: r2(-s.N), dS: r2(-s.S), estado: 'sinalex', ncs: s.ncs });
+        const fch = f ? f.fecha : (vig.find(r => r.refDoc === doc) || {}).fecha || '';
+        if (fch > finAlex) return;   // todavía no llega en el archivo de Alex: no es una diferencia
+        filas.push({ doc, fecha: fch, cli: f ? f.cli : '', razon: f ? f.nombre : '', producto: '', alexN: 0, alexS: 0, sisN: r2(s.N), sisS: r2(s.S), dN: r2(-s.N), dS: r2(-s.S), estado: 'sinalex', ncs: s.ncs });
       });
       const cuenta = {}; filas.forEach(f => { cuenta[f.estado] = (cuenta[f.estado] || 0) + 1; });
       // Tabla "SR. ALEX": Nestlé diario según Alex, acumulado, lo que informa por correo y diferencia
-      const porDia = {};
-      alex.filter(a => a.fecha >= desde && a.fecha <= corte).forEach(a => { porDia[a.fecha] = (porDia[a.fecha] || 0) + a.nmonto; });
-      let acc = 0;
-      const srAlex = Object.keys(porDia).sort().map(f => { acc += porDia[f]; const c = correo[f]; return { fecha: f, diario: r2(porDia[f]), acumulado: r2(acc), correo: c === undefined || c === '' ? null : num(c), dif: c === undefined || c === '' ? null : r2(num(c) - acc) }; });
-      concil = { filas, cuenta, srAlex };
+      const porDia = {}, porDiaS = {};
+      alex.filter(a => a.fecha >= desde && a.fecha <= corte).forEach(a => { porDia[a.fecha] = (porDia[a.fecha] || 0) + a.nmonto; porDiaS[a.fecha] = (porDiaS[a.fecha] || 0) + a.smonto; });
+      let acc = 0, accS = 0;
+      const vacio = v => v === undefined || v === null || v === '';
+      const srAlex = Object.keys(porDia).sort().map(f => {
+        acc += porDia[f]; accS += porDiaS[f] || 0; const c = correo[f], cs = correoS[f];
+        return { fecha: f, diario: r2(porDia[f]), acumulado: r2(acc), correo: vacio(c) ? null : num(c), dif: vacio(c) ? null : r2(num(c) - acc),
+          diarioS: r2(porDiaS[f] || 0), acumuladoS: r2(accS), correoS: vacio(cs) ? null : num(cs), difS: vacio(cs) ? null : r2(num(cs) - accS) };
+      });
+      concil = { filas, cuenta, srAlex, finAlex };
     }
 
     // Por producto (de las hojas diarias de Alex)
