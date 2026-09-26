@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css?v=1.0">
 <link rel="stylesheet" href="css/ventas.css?v=1.0">
+<link rel="stylesheet" href="css/nc.css?v=1.0">
 </head>
 <body>
 
@@ -53,6 +54,10 @@
       <button class="rail-item" id="railVentas" title="Ventas">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
         <span class="rail-label">Ventas</span>
+      </button>
+      <button class="rail-item" id="railNC" title="Notas de crédito">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 1 .7V2l-1 .7-3-2-3 2-3-2-3 2-3-2z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+        <span class="rail-label">Notas de crédito</span>
       </button>
       <button class="rail-item" title="Logística — próximamente">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="15" height="10" rx="1"/><path d="M16 10h4l3 3v4h-7z"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/></svg>
@@ -558,6 +563,128 @@
         </div>
         <!-- ===== FIN MÓDULO VENTAS ===== -->
 
+        <!-- ===================================================== -->
+        <!-- ===== MÓDULO NOTAS DE CRÉDITO (js/nc.js, css/nc.css) ===== -->
+        <!-- ===================================================== -->
+        <div class="wrap" id="modNC" style="display:none;">
+          <div class="page-header">
+            <div>
+              <div class="eyebrow">Notas de crédito · Saga Trans Confitería</div>
+              <h1 class="page-title">Panel de Notas de Crédito</h1>
+              <div class="subtitle">Corte al <span id="ncCorteLabel">—</span><span id="ncAlexLabel"></span></div>
+            </div>
+            <div class="no-print corte-controls">
+              <div class="segmented">
+                <button class="tab-btn tab-active" id="ncModoMes">Cierre de mes</button>
+                <button class="tab-btn" id="ncModoDia">Día específico</button>
+              </div>
+              <select id="ncMesSel" class="input-select"></select>
+              <input type="date" id="ncDiaSel" class="input-select" style="display:none;">
+              <div class="account-pill">
+                <div class="account-avatar" id="ncUserAvatar">—</div>
+                <span class="account-email" id="ncUserEmail">—</span>
+                <button class="logout-btn" id="ncLogoutBtn" title="Cerrar sesión"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="no-print v-infobar">
+            <div class="export-group">
+              <button class="export-btn" id="ncBtnAlex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg> Subir archivo de Alex</button>
+              <input type="file" id="ncAlexFile" accept=".xlsx,.xls" style="display:none;">
+              <button class="export-btn" id="ncBtnRecargar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg> Actualizar datos</button>
+            </div>
+            <div class="export-group">
+              <button class="export-btn" id="ncReportePdf"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg> Reporte diario PDF</button>
+              <button class="export-btn" id="ncReporteXlsx"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Reporte diario Excel</button>
+            </div>
+          </div>
+          <div class="v-avisos no-print" id="ncAvisos"></div>
+
+          <div class="no-print v-tabbar" id="ncTabs">
+            <button class="tab-btn tab-active" data-nctab="resumen">Resumen</button>
+            <button class="tab-btn" data-nctab="diario">Diario por serie</button>
+            <button class="tab-btn" data-nctab="anuladas">Anuladas</button>
+            <button class="tab-btn" data-nctab="concil">Conciliación Alex</button>
+            <button class="tab-btn" data-nctab="producto">Por producto</button>
+            <button class="tab-btn" data-nctab="ajustes">Ajustes</button>
+            <button class="tab-btn" data-nctab="documentos">Documentos</button>
+          </div>
+
+          <section class="tab-panel" id="ncpanel-resumen">
+            <div class="kpi-grid kpi-grid-4" id="ncKpis1"></div>
+            <div class="kpi-grid kpi-grid-4" id="ncKpis2"></div>
+            <div class="card v-chart-card"><div class="section-title" id="ncCurvaTitulo" style="margin-bottom:8px;">% Descuentos ST</div><div class="v-chart-box"><canvas id="ncCurva" role="img" aria-label="Porcentaje acumulado de descuentos ST por día"></canvas></div></div>
+          </section>
+
+          <section class="tab-panel" id="ncpanel-diario" style="display:none;">
+            <div class="no-print section-head">
+              <div class="segmented" id="ncIgvSel"><button class="tab-btn tab-active" data-igv="c">Con IGV</button><button class="tab-btn" data-igv="s">Sin IGV</button></div>
+              <button class="export-btn" id="ncExportDiario"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button>
+            </div>
+            <div class="card"><div class="table-scroll"><table class="v-table" id="ncDiarioTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div></div>
+          </section>
+
+          <section class="tab-panel" id="ncpanel-anuladas" style="display:none;">
+            <div class="no-print section-head">
+              <div class="kpi-grid kpi-grid-3" id="ncAnuKpis" style="flex:1;"></div>
+            </div>
+            <div class="no-print toolbar">
+              <div class="segmented" id="ncAnuFiltro"><button class="tab-btn tab-active" data-f="todas">Todas</button><button class="tab-btn" data-f="rechazo">Rechazo</button><button class="tab-btn" data-f="parcial">Parcial</button><button class="tab-btn" data-f="error">Error</button></div>
+              <button class="v-meta-save" id="ncAnuGuardar" style="display:none;">Guardar cambios</button>
+            </div>
+            <div class="card"><div class="table-scroll"><table class="v-table" id="ncAnuTable"><thead></thead><tbody></tbody></table></div></div>
+            <div class="doc-footer"><div></div><div class="pager"><button class="page-btn" id="ncAnuPrev">&larr;</button><span id="ncAnuPage"></span><button class="page-btn" id="ncAnuNext">&rarr;</button></div></div>
+          </section>
+
+          <section class="tab-panel" id="ncpanel-concil" style="display:none;">
+            <div id="ncConcilVacio" class="empty-state" style="display:none;"><div class="empty-title">Todavía no hay archivo de Alex para este mes</div><button class="export-btn" id="ncBtnAlex2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg> Subir archivo de Alex</button></div>
+            <div id="ncConcilBox">
+              <div class="kpi-grid" id="ncConKpis" style="grid-template-columns:repeat(5,minmax(0,1fr));"></div>
+              <div class="no-print section-head"><div class="section-title" id="ncConTitulo"></div><button class="export-btn" id="ncExportConcil"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div>
+              <div class="card"><div class="table-scroll"><table class="v-table" id="ncConTable"><thead></thead><tbody></tbody></table></div></div>
+              <div class="doc-footer"><div></div><div class="pager"><button class="page-btn" id="ncConPrev">&larr;</button><span id="ncConPage"></span><button class="page-btn" id="ncConNext">&rarr;</button></div></div>
+              <div class="section-head"><div class="section-title">Sr. Alex · Nestlé diario</div><button class="v-meta-save" id="ncCorreoGuardar" style="display:none;">Guardar montos del correo</button></div>
+              <div class="card"><div class="table-scroll"><table class="v-table" id="ncSrAlexTable"><thead></thead><tbody></tbody></table></div></div>
+            </div>
+          </section>
+
+          <section class="tab-panel" id="ncpanel-producto" style="display:none;">
+            <div class="no-print section-head"><div></div><button class="export-btn" id="ncExportProd"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div>
+            <div class="card"><div class="table-scroll"><table class="v-table" id="ncProdTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div></div>
+          </section>
+
+          <section class="tab-panel" id="ncpanel-ajustes" style="display:none;">
+            <div class="card filter-card no-print">
+              <div class="filter-row">
+                <div class="filter-field" style="min-width:240px;"><label for="ncAjConcepto">Ajuste manual</label><input type="text" id="ncAjConcepto" placeholder="Concepto (ej. Correo reparto)"></div>
+                <div class="filter-field"><label for="ncAjCargo">Asume</label><select id="ncAjCargo"><option value="S">ST</option><option value="N">Nestlé</option></select></div>
+                <div class="filter-field"><label for="ncAjMonto">Monto c/IGV (negativo resta)</label><input type="number" id="ncAjMonto" step="0.01" placeholder="-3691.75"></div>
+                <button class="v-meta-save" id="ncAjAgregar">Agregar ajuste</button>
+              </div>
+            </div>
+            <div class="card"><div class="table-scroll"><table class="v-table" id="ncAjTable"><thead></thead><tbody></tbody></table></div></div>
+          </section>
+
+          <section class="tab-panel" id="ncpanel-documentos" style="display:none;">
+            <div class="card filter-card no-print">
+              <div class="filter-row">
+                <div class="filter-field"><label for="ncDocBuscar">Buscar</label><input type="text" id="ncDocBuscar" placeholder="Factura, NC, código o cliente..."></div>
+                <div class="filter-field"><label for="ncDocGrupo">Grupo</label><select id="ncDocGrupo"><option value="all">Todos</option><option value="regular">Regular</option><option value="adicional">Adicional</option><option value="paneton">Panetón</option></select></div>
+                <button class="clear-btn" id="ncDocLimpiar">Limpiar</button>
+              </div>
+            </div>
+            <div class="pendiente-banner v-ext no-print" id="ncSelBar" style="display:none;"></div>
+            <div class="no-print doc-toolbar"><div></div><button class="export-btn" id="ncExportDocs"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div>
+            <div class="card"><div class="table-scroll"><table class="v-table" id="ncDocTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div></div>
+            <div class="doc-footer"><div></div><div class="pager"><button class="page-btn" id="ncDocPrev">&larr;</button><span id="ncDocPage"></span><button class="page-btn" id="ncDocNext">&rarr;</button></div></div>
+          </section>
+
+          <div class="nc-reporte" id="ncReporte"></div>
+        </div>
+        <!-- ===== FIN MÓDULO NOTAS DE CRÉDITO ===== -->
+
+
     </div>
   </div>
 
@@ -570,6 +697,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="js/ventas-calc.js?v=1.0"></script>
   <script src="js/ventas.js?v=1.0"></script>
+  <script src="js/nc-calc.js?v=1.0"></script>
+  <script src="js/nc.js?v=1.0"></script>
 <script>document.getElementById('loginVersion').textContent = 'versión ' + PANEL_VERSION;</script>
 </body>
 </html>
