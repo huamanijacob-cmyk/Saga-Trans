@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="css/style.css?v=1.0">
 <link rel="stylesheet" href="css/ventas.css?v=1.0">
 <link rel="stylesheet" href="css/nc.css?v=1.0">
+<link rel="stylesheet" href="css/subir.css?v=1.0">
 </head>
 <body>
 
@@ -86,6 +87,7 @@
             </div>
             <select id="mesSel" class="input-select"></select>
             <input type="date" id="diaSel" class="input-select" style="display:none;">
+            <button class="export-btn sub-btn" data-abrir-subir title="Subir Ventas, ContabilidadNC, Transportistas, Cuotas, Cartera o Calendario"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg> Subir archivos</button>
             <div class="account-pill">
               <div class="account-avatar" id="userAvatar">—</div>
               <span class="account-email" id="userEmailLabel">—</span>
@@ -691,6 +693,18 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <!-- ===== Subir archivos (js/subir.js) ===== -->
+  <div class="sub-modal" id="subirModal" style="display:none;">
+    <div class="card sub-card" role="dialog" aria-modal="true" aria-labelledby="subirTitulo">
+      <div class="sub-hd"><div class="section-title" id="subirTitulo">Subir archivos</div><button class="clear-btn" id="subirCerrar" aria-label="Cerrar">Cerrar</button></div>
+      <div class="sub-drop" id="subirDrop" tabindex="0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg><div><b>Arrastra aquí los Excel</b> o haz clic para elegirlos</div>
+        <div class="sub-tipos">Ventas_AAAA-MM · ContabilidadNC_AAAA-MM · Transportistas_AAAA-MM · Cuotas_AAAA-MM · Cartera_AAAA-MM · Calendario_AAAA</div></div>
+      <input type="file" id="subirInput" accept=".xlsx" multiple style="display:none;">
+      <div class="table-scroll" id="subirTabla"></div>
+      <div class="sub-ft"><div class="note" id="subirMsg"></div><div class="export-group"><button class="clear-btn" id="subirCancelar">Cancelar</button><button class="v-meta-save" id="subirConfirmar" style="display:none;">Subir</button></div></div>
+    </div>
+  </div>
+
   <script src="js/version.js?v=1.0"></script>
   <script src="js/config.js?v=1.0"></script>
   <script src="js/app.js?v=1.0"></script>
@@ -699,6 +713,7 @@
   <script src="js/ventas.js?v=1.0"></script>
   <script src="js/nc-calc.js?v=1.0"></script>
   <script src="js/nc.js?v=1.0"></script>
+  <script src="js/subir.js?v=1.0"></script>
 <script>document.getElementById('loginVersion').textContent = 'versión ' + PANEL_VERSION;</script>
 </body>
 </html>
