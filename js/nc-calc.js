@@ -89,15 +89,21 @@
     const filas = {}; const obs = {}; const prod = {};
     Object.entries(hojas).forEach(([nombre, rows]) => {
       if (!rows.length || txt(rows[0][0]).toLowerCase() !== 'codclie') return;
-      const colO = txt(rows[0][14]).toLowerCase();
-      const esConsolidado = colO.startsWith('observ');
+      // Columnas por su título: "Observación" (RECHAZO/PARCIAL) y "Producto". En las hojas por día
+      // de Alex la columna O no tiene título y trae el producto.
+      const head = rows[0].map(h => txt(h).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+      let colObs = head.findIndex(h => h.startsWith('observ'));
+      let colProd = head.findIndex(h => h.startsWith('producto'));
+      if (colObs < 0 && colProd < 0) colProd = 14;
+      const esConsolidado = colObs >= 0 && colProd < 0;
       for (let i = 2; i < rows.length; i++) {
         const r = rows[i]; const tipo = txt(r[4]).toUpperCase(); const n = parseInt(txt(r[5]), 10);
         if (!tipo || !n) continue;
         const key = `${tipo}|${n}`;
-        const o = txt(r[14]);
-        if (esConsolidado) { if (o) obs[key] = o.toUpperCase(); }
-        else if (o) prod[key] = o;
+        const o = colObs >= 0 ? txt(r[colObs]).toUpperCase() : '';
+        const pr = colProd >= 0 ? txt(r[colProd]) : '';
+        if (o) obs[key] = o;
+        if (pr) prod[key] = pr;
         const cliRaw = txt(r[0]).replace(/\D/g, '');
         const fila = {
           key, tipo, n, cli: cliRaw ? pad(cliRaw, 9) : '', razon: txt(r[1]), fecha: fecha(r[2]), vendedor: txt(r[3]),
