@@ -14,7 +14,8 @@
     NC_FOLDER: 'ContabilidadNC', VENTAS_FOLDER: 'Ventas', BUCKET: 'ventas-data',
     AJUSTES: m => `Overrides/nc_ajustes_${m}.json`,
     REGISTRO: m => `Overrides/nc_registro_${m}.json`,
-    ALEX: m => `Overrides/alex_${m}.xlsx`,
+    ALEX: m => `DescuentosAlex/alex_${m}.xlsx`,
+    ALEX_ANTES: m => `Overrides/alex_${m}.xlsx`,   // ubicación anterior: se sigue leyendo si no hay uno nuevo
     POR_PAG: 15,
   };
   const MES_ABBR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic'];
@@ -98,7 +99,7 @@
         loadModuleFile(CFG.VENTAS_FOLDER, CFG.VENTAS_FOLDER, ym),
         leerJson(CFG.AJUSTES(ym)).catch(() => null),
         leerJson(CFG.REGISTRO(ym)).catch(() => null),
-        descargar(CFG.ALEX(ym)).catch(e => { console.error(e); return null; }),
+        descargar(CFG.ALEX(ym)).then(b => b || descargar(CFG.ALEX_ANTES(ym))).catch(e => { console.error(e); return null; }),
       ]);
       const nc = C.parseNC(ncRows || []);
       if (!nc.length) aviso(`Todavía no hay notas de crédito de ${MES_NOMBRE[+ym.slice(5) - 1]} ${ym.slice(0, 4)}. Sube <b>&nbsp;ContabilidadNC_${ym}.xlsx&nbsp;</b> a Storage.`);
