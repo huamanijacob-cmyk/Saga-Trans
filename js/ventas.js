@@ -627,8 +627,8 @@
     });
   }
   function imprimir(id) {
-    const node = $(id); node.classList.add('print-target'); window.print();
-    setTimeout(() => node.classList.remove('print-target'), 500);
+    const node = $(id); node.classList.add('print-target'); document.body.classList.add('imprimiendo'); window.print();
+    setTimeout(() => { node.classList.remove('print-target'); document.body.classList.remove('imprimiendo'); }, 500);
   }
 
   // ---------------- Pestañas y módulos ----------------

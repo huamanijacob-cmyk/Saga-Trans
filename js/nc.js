@@ -495,7 +495,8 @@
       ${img ? `<h2>% Descuentos ST</h2><img src="${img}" alt="Curva % descuentos ST">` : ''}
       ${c ? `<h2>Conciliación con Alex</h2><table><tbody>${Object.entries(ESTADO).map(([k, v]) => `<tr><td>${v}</td><td class="num">${fN(c.cuenta[k] || 0)}</td></tr>`).join('')}</tbody></table>` : ''}
       <h2>Diario por serie (con IGV)</h2>${$('ncDiarioTable').outerHTML}`;
-    const node = $('ncReporte'); node.classList.add('print-target'); window.print(); setTimeout(() => node.classList.remove('print-target'), 800);
+    const node = $('ncReporte'); node.classList.add('print-target'); document.body.classList.add('imprimiendo'); window.print();
+    setTimeout(() => { node.classList.remove('print-target'); document.body.classList.remove('imprimiendo'); }, 800);
   }
 
   // ---------------- Pestañas, módulo y eventos ----------------

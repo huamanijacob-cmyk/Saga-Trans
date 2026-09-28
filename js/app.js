@@ -1477,9 +1477,9 @@ function renderPdes() {
 
 function printTarget(id) {
   const node = document.getElementById(id);
-  node.classList.add('print-target');
+  node.classList.add('print-target'); document.body.classList.add('imprimiendo');
   window.print();
-  setTimeout(() => node.classList.remove('print-target'), 500);
+  setTimeout(() => { node.classList.remove('print-target'); document.body.classList.remove('imprimiendo'); }, 500);
 }
 
 /* ---------------- wiring de eventos ---------------- */
