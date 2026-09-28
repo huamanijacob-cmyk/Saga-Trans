@@ -283,9 +283,13 @@ th button:hover{color:var(--red);}
 @media print{
   .no-print{display:none !important;}
   body{background:#FFFFFF;}
-  body *{visibility:hidden;}
-  .print-target,.print-target *{visibility:visible;}
-  .print-target{position:absolute;left:0;top:0;width:100%;}
+  /* Botón "Descargar PDF": solo se ve su área. Ctrl + P: se imprime la pestaña visible. */
+  body.imprimiendo *{visibility:hidden;}
+  body.imprimiendo .print-target,body.imprimiendo .print-target *{visibility:visible;}
+  body.imprimiendo .print-target{position:absolute;left:0;top:0;width:100%;}
+  .rail,.sub-modal,.loading-overlay,.login-screen,.tabbar{display:none !important;}
+  .content-pad{padding:0 !important;}
+  .app{display:block !important;}
   .table-scroll{overflow:visible !important;}
   table{width:100% !important;min-width:0 !important;table-layout:auto;}
   th,td{font-size:10px !important;padding:5px 7px !important;white-space:nowrap;}
