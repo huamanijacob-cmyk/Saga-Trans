@@ -21,12 +21,12 @@
   const MES_ABBR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic'];
   const MES_NOMBRE = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
   const CLASE = { rechazo: 'Rechazo', parcial: 'Parcial', error: 'Error' };
-  const ESTADO = { coincide: 'Coincide', distinto: 'Monto distinto', reparto: 'Reparto distinto', rechazo: 'Rechazo', parcial: 'Parcial', facanulada: 'Factura anulada', falta: 'Falta emitir NC', sinalex: 'NC sin Alex' };
-  const GRUPO = { regular: 'Regular', adicional: 'Adicional', paneton: 'Panetón' };
+  const ESTADO = { coincide: 'Coincide', distinto: 'Monto distinto', duplicada: 'NC duplicada', reparto: 'Reparto distinto', rechazo: 'Rechazo', parcial: 'Parcial', facanulada: 'Factura anulada', falta: 'Falta emitir NC', sinalex: 'NC sin Alex' };
+  const GRUPO = { regular: 'Regular', adicional: 'Adicional', paneton: 'Panetón', regularizada: 'Regularizada' };
 
   const st = {
     booted: false, modo: 'mes', mesSel: null, diaSel: null, ym: null, corte: null, tab: 'resumen', igv: 'c',
-    anu: { filtro: 'todas', page: 0, cambios: {} },
+    anu: { filtro: 'todas', page: 0, cambios: {}, q: '', cargo: 'all', origen: 'all', desde: '', hasta: '' },
     con: { filtro: 'pend', page: 0 },
     doc: { buscar: '', grupo: 'all', page: 0, sel: new Set() },
     det: null,
@@ -188,7 +188,16 @@
   }
 
   function renderAnuladas() {
-    const A = R.anuladas;
+    const q = st.anu.q.trim().toLowerCase();
+    const A = R.anuladas.filter(a => {
+      const fa = facturaDeAnulada(a);
+      if (q && !(a.doc.toLowerCase().includes(q) || fa.toLowerCase().includes(q) || a.codcli.includes(q))) return false;
+      if (st.anu.cargo !== 'all' && a.cargo !== st.anu.cargo) return false;
+      if (st.anu.origen !== 'all' && (a.origen || '') !== st.anu.origen) return false;
+      if (st.anu.desde && a.fecha < st.anu.desde) return false;
+      if (st.anu.hasta && a.fecha > st.anu.hasta) return false;
+      return true;
+    });
     const cuenta = c => A.filter(a => a.clase === c);
     const monto = arr => arr.reduce((s, a) => s + a.montoAnulada, 0);
     $('ncAnuKpis').innerHTML = kpi('red', 'Rechazo', fN(cuenta('rechazo').length), fS(monto(cuenta('rechazo')))) + kpi('amber', 'Parcial', fN(cuenta('parcial').length), fS(monto(cuenta('parcial')))) + kpi('navy', 'Error', fN(cuenta('error').length));
@@ -197,7 +206,7 @@
     const per = CFG.POR_PAG, max = Math.max(0, Math.ceil(lista.length / per) - 1); st.anu.page = Math.min(st.anu.page, max);
     $('ncAnuPage').textContent = `${st.anu.page + 1} / ${max + 1}`; $('ncAnuPrev').disabled = st.anu.page === 0; $('ncAnuNext').disabled = st.anu.page === max;
     const tb = $('ncAnuTable');
-    tb.querySelector('thead').innerHTML = '<tr><th class="c">Nota de crédito</th><th class="c">Factura</th><th class="c">Emisión</th><th class="c">Anulada</th><th class="c">Cliente</th><th class="c">Asume</th><th class="r">Monto</th><th class="c">Origen</th><th class="c">Clasificación</th></tr>';
+    tb.querySelector('thead').innerHTML = '<tr><th class="c">Nota de crédito</th><th class="c">Doc. referencia</th><th class="c">Emisión</th><th class="c">Anulada</th><th class="c">Cliente</th><th class="c">Asume</th><th class="r">Monto</th><th class="c">Origen</th><th class="c">Clasificación</th></tr>';
     const ORIG = { alex: 'Alex', registro: 'Registro', manual: 'Manual', '': '—' };
     tb.querySelector('tbody').innerHTML = lista.slice(st.anu.page * per, st.anu.page * per + per).map(a => {
       const cam = st.anu.cambios[a.doc] || {};
@@ -217,10 +226,10 @@
     $('ncConcilBox').style.display = c ? '' : 'none';
     if (!c) return;
     const n = k => c.cuenta[k] || 0;
-    const defs = [['coincide', 'Coinciden', 'green', n('coincide')], ['distinto', 'Monto distinto', 'red', n('distinto')], ['reparto', 'Reparto distinto', 'amber', n('reparto')], ['rechparc', 'Rechazo / parcial', 'red', n('rechazo') + n('parcial') + n('facanulada')], ['falta', 'Falta emitir NC', 'navy', n('falta')], ['sinalex', 'NC sin Alex', 'teal', n('sinalex')]];
+    const defs = [['coincide', 'Coinciden', 'green', n('coincide')], ['distinto', 'Monto distinto', 'red', n('distinto') + n('duplicada')], ['reparto', 'Reparto distinto', 'amber', n('reparto')], ['rechparc', 'Rechazo / parcial', 'red', n('rechazo') + n('parcial') + n('facanulada')], ['falta', 'Falta emitir NC', 'navy', n('falta')], ['sinalex', 'NC sin Alex', 'teal', n('sinalex')]];
     $('ncConKpis').innerHTML = defs.map(([k, l, col, v]) => `<div class="kpi kpi-${col} ${st.con.filtro === k ? 'on' : ''}" data-cf="${k}"><div class="kpi-label">${l}</div><div class="kpi-val">${fN(v)}</div></div>`).join('');
     const filtro = st.con.filtro;
-    const lista = c.filas.filter(f => filtro === 'pend' ? f.estado !== 'coincide' : filtro === 'rechparc' ? (f.estado === 'rechazo' || f.estado === 'parcial' || f.estado === 'facanulada') : f.estado === filtro)
+    const lista = c.filas.filter(f => filtro === 'pend' ? f.estado !== 'coincide' : filtro === 'rechparc' ? (f.estado === 'rechazo' || f.estado === 'parcial' || f.estado === 'facanulada') : filtro === 'distinto' ? (f.estado === 'distinto' || f.estado === 'duplicada') : f.estado === filtro)
       .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.doc.localeCompare(b.doc));
     $('ncConTitulo').textContent = (c.finAlex ? `Alex hasta el ${fD(c.finAlex).slice(0, 5)} · ` : '') + (filtro === 'pend' ? `Por revisar · ${fN(lista.length)} facturas` : `${defs.find(d => d[0] === filtro)?.[1] || ''} · ${fN(lista.length)} facturas`);
     const per = CFG.POR_PAG, max = Math.max(0, Math.ceil(lista.length / per) - 1); st.con.page = Math.min(st.con.page, max);
@@ -229,7 +238,7 @@
     tb.querySelector('thead').innerHTML = '<tr><th class="c">Fecha</th><th class="c">Factura</th><th class="c">Cliente</th><th>Razón social</th><th class="r">Alex Nestlé</th><th class="r">Sistema Nestlé</th><th class="r">Dif.</th><th class="r">Alex ST</th><th class="r">Sistema ST</th><th class="r">Dif.</th><th class="c">Resultado</th></tr>';
     const dif = v => (Math.abs(v) <= 0.05 ? '<span class="muted">0.00</span>' : `<span class="${v < 0 ? 'rej' : ''}">${f2(v)}</span>`);
     tb.querySelector('tbody').innerHTML = lista.slice(st.con.page * per, st.con.page * per + per).map(f => `<tr class="${st.det === f.doc ? 'nc-abierta' : ''}"><td class="mono c">${fD(f.fecha).slice(0, 5)}</td>${linkFactura(f.doc)}<td class="mono c">${esc(f.cli)}</td><td>${esc(f.razon)}</td>
-      <td class="num">${f2(f.alexN)}</td><td class="num">${f2(f.sisN)}</td><td class="num">${dif(f.dN)}</td><td class="num">${f2(f.alexS)}</td><td class="num">${f2(f.sisS)}</td><td class="num">${dif(f.dS)}</td><td class="c">${chip(f.estado === 'facanulada' ? 'rechazo' : f.estado, ESTADO[f.estado] + (f.auto ? ' · auto' : ''))}</td></tr>`).join('')
+      <td class="num">${f2(f.alexN)}</td><td class="num">${f2(f.sisN)}</td><td class="num">${dif(f.dN)}</td><td class="num">${f2(f.alexS)}</td><td class="num">${f2(f.sisS)}</td><td class="num">${dif(f.dS)}</td><td class="c">${chip(f.estado === 'facanulada' ? 'rechazo' : f.estado === 'duplicada' ? 'duplicada' : f.estado, ESTADO[f.estado] + (f.auto && f.estado !== 'duplicada' ? ' · auto' : ''))}</td></tr>`).join('')
       || '<tr><td class="muted" colspan="11">Nada que revisar en este filtro.</td></tr>';
     // Sr. Alex
     const ta = $('ncSrAlexTable');
@@ -262,8 +271,10 @@
     const adi = {};
     R.vigentes.filter(r => r.grupo === 'adicional').forEach(r => { const e = r.etiqueta || 'Adicional'; const a = (adi[e] = adi[e] || { n: 0, m: 0, quien: '' }); a.n++; a.m += r.mondoc; const mk = M[r.doc]; if (mk) a.quien = `${mk.usuario || ''} · ${mk.fechaTexto || ''}`; });
     const manAnu = Object.entries(M).filter(([, v]) => ['rechazo', 'parcial', 'error'].includes(v.tipo));
+    const regs = R.vigentes.filter(r => r.grupo === 'regularizada');
     let h = Object.entries(adi).map(([e, a]) => `<tr><td>${esc(e)}</td><td class="c">${chip('adicional', 'Adicional')}</td><td class="num c">${a.n}</td><td class="num">${f2(a.m)}</td><td>${esc(a.quien)}</td><td class="c"><button class="clear-btn" data-quitar-etq="${esc(e)}">Quitar</button></td></tr>`).join('');
     h += D.ajustes.manuales.map((a, i) => `<tr><td>${esc(a.concepto)}</td><td class="c">${chip('distinto', a.cargo === 'N' ? 'Ajuste Nestlé' : 'Ajuste ST')}</td><td class="c">—</td><td class="num">${f2(Number(a.monto))}</td><td>${esc(`${a.usuario || ''} · ${a.fechaTexto || ''}`)}</td><td class="c"><button class="clear-btn" data-quitar-aj="${i}">Quitar</button></td></tr>`).join('');
+    h += regs.map(r => { const mk = M[r.doc] || {}; return `<tr><td>${esc(r.doc)} regularizada con ND ${esc(mk.nd || '')}${mk.ndFecha ? ' · ' + fD(mk.ndFecha) : ''}</td><td class="c">${chip('regularizada', 'Nota de débito')}</td><td class="num c">1</td><td class="num">${f2(-r.mondoc)}</td><td>${esc(`${mk.usuario || ''} · ${mk.fechaTexto || ''}`)}</td><td class="c"><button class="clear-btn" data-nd-quitar="${esc(r.doc)}">Quitar</button></td></tr>`; }).join('');
     if (manAnu.length) h += `<tr><td>Anuladas clasificadas a mano</td><td class="c">${chip('rechazo', 'Anuladas')}</td><td class="num c">${manAnu.length}</td><td class="num">${f2(manAnu.reduce((s, [, v]) => s + (Number(v.monto) || 0), 0))}</td><td></td><td></td></tr>`;
     tb.querySelector('tbody').innerHTML = h || '<tr><td class="muted" colspan="6">No hay adicionales ni ajustes en este mes. Los adicionales se marcan desde la pestaña Documentos.</td></tr>';
   }
@@ -297,6 +308,7 @@
   // ---------------- Detalle de factura (clic en el número) ----------------
   const linkFactura = doc => `<td class="mono c clickable" data-det="${esc(doc)}" title="Ver notas de crédito de la factura"><span class="r-link">${esc(doc)}</span></td>`;
   const facturaDeAnulada = a => a.refDocRegistro || (a.alexCand && a.alexCand.doc) || '';
+  const refDe = n => (n.estdoc === 'AN' ? facturaDeAnulada(n) : n.refDoc) || '';   // documento de origen de la NC
   function ncsDeFactura(doc) {
     const vig = R.vigentes.filter(r => r.refDoc === doc).map(r => ({ ...r, estadoTxt: 'vigente', montoRef: r.mondoc, subRef: r.presub }));
     const anu = R.anuladas.filter(a => facturaDeAnulada(a) === doc).map(a => ({ ...a, estadoTxt: 'anulada', montoRef: a.montoAnulada, subRef: a.montoAnulada / C.IGV }));
@@ -306,7 +318,7 @@
     st.det = doc;
     const f = R.facturas[doc], a = R.alexPorDoc[doc], ncs = ncsDeFactura(doc);
     const venta = f ? f.venta : 0, ventaIgv = venta * C.IGV;
-    const vig = ncs.filter(n => n.estadoTxt === 'vigente');
+    const vig = ncs.filter(n => n.estadoTxt === 'vigente' && n.grupo !== 'regularizada');
     const sum = (c, k) => vig.filter(n => n.cargo === c).reduce((s, n) => s + n[k], 0);
     const sN = sum('N', 'presub'), sS = sum('S', 'presub'), cN = sum('N', 'mondoc'), cS = sum('S', 'mondoc');
     const p = v => (venta ? fP1(v / venta) : '—');
@@ -320,15 +332,42 @@
         <div class="nc-det-b"><div class="kpi-label">Alex</div>${a ? `<b>${fP1(a.dpct)} · ${fS(a.dmonto)}</b><span>Nestlé ${fP1(a.npct)} (${f2(a.nmonto)}) · ST ${fP1(a.spct)} (${f2(a.smonto)})${a.producto ? ' · ' + esc(a.producto) : ''}${a.obs ? ' · ' + esc(a.obs) : ''}</span>` : '<b>No está en el archivo de Alex</b><span>&nbsp;</span>'}</div>
         <div class="nc-det-b"><div class="kpi-label">Sistema (NC vigentes)</div><b>${p(sN + sS)} · ${fS(cN + cS)}</b><span>Nestlé ${p(sN)} (${f2(cN)}) · ST ${p(sS)} (${f2(cS)})</span></div>
       </div>
-      <div class="table-scroll"><table class="v-table"><thead><tr><th class="c">Nota de crédito</th><th class="c">Serie</th><th class="c">Número</th><th class="c">Emisión</th><th class="c">Estado</th><th class="c">Anulada</th><th class="c">Asume</th><th>Motivo</th><th class="r">s/IGV</th><th class="r">c/IGV</th><th class="c">%</th></tr></thead><tbody>
-      ${ncs.map(n => `<tr><td class="mono c">${esc(n.doc)}</td><td class="mono c">${esc(n.sersun)}</td><td class="mono c">${esc(n.numsun)}</td><td class="mono c">${fD(n.fecha)}</td>
-        <td class="c">${chip(n.estadoTxt, n.estadoTxt === 'vigente' ? 'Vigente' : 'Anulada · ' + (CLASE[n.clase] || ''))}</td><td class="mono c">${n.fecanu ? fD(n.fecanu) : '—'}</td>
-        <td class="c">${n.cargo === 'N' ? 'Nestlé' : 'ST'}</td><td>${esc(n.motivo)}</td><td class="num">${f2(n.subRef)}</td><td class="num">${f2(n.montoRef)}</td><td class="num c">${p(n.subRef)}</td></tr>`).join('')
-        || '<tr><td class="muted" colspan="11">No hay notas de crédito emitidas para esta factura.</td></tr>'}
+      <div class="table-scroll"><table class="v-table"><thead><tr><th class="c">Nota de crédito</th><th class="c">Serie</th><th class="c">Número</th><th class="c">Doc. referencia</th><th class="c">Emisión</th><th class="c">Estado</th><th class="c">Anulada</th><th class="c">Asume</th><th>Motivo</th><th class="r">s/IGV</th><th class="r">c/IGV</th><th class="c">%</th><th class="c">Acción</th></tr></thead><tbody>
+      ${ncs.map(n => `<tr><td class="mono c">${esc(n.doc)}</td><td class="mono c">${esc(n.sersun)}</td><td class="mono c">${esc(n.numsun)}</td><td class="mono c">${esc(refDe(n) || '—')}</td><td class="mono c">${fD(n.fecha)}</td>
+        <td class="c">${n.grupo === 'regularizada' ? chip('regularizada', 'Regularizada · ' + (n.nd ? 'ND ' + esc(n.nd) : 'ND')) : chip(n.estadoTxt, n.estadoTxt === 'vigente' ? 'Vigente' : 'Anulada · ' + (CLASE[n.clase] || ''))}${n.duplicada && n.grupo !== 'regularizada' ? ' ' + chip('duplicada', 'Duplicada') : ''}</td><td class="mono c">${n.fecanu ? fD(n.fecanu) : '—'}</td>
+        <td class="c">${n.cargo === 'N' ? 'Nestlé' : 'ST'}</td><td>${esc(n.motivo)}</td><td class="num">${f2(n.subRef)}</td><td class="num">${f2(n.montoRef)}</td><td class="num c">${p(n.subRef)}</td>
+        <td class="c">${accionNC(n)}</td></tr>${st.ndForm === n.doc ? formND(n) : ''}`).join('')
+        || '<tr><td class="muted" colspan="13">No hay notas de crédito emitidas para esta factura.</td></tr>'}
       </tbody></table></div>`;
     renderPanelActual();
     box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
+  // Regularizar una NC con nota de débito (cuando ya no se puede anular, p. ej. duplicada)
+  function accionNC(n) {
+    if (n.estadoTxt !== 'vigente') return '';
+    if (n.grupo === 'regularizada') return `<button class="clear-btn nc-mini" data-nd-quitar="${esc(n.doc)}">Quitar ND</button>`;
+    return `<button class="export-btn nc-mini" data-nd-abrir="${esc(n.doc)}">Regularizar con ND</button>`;
+  }
+  function formND(n) {
+    return `<tr class="nc-nd-form"><td colspan="13"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+      <span>Nota de débito que regulariza <b class="mono">${esc(n.doc)}</b> (${fS(n.mondoc)}):</span>
+      <input type="text" id="ncNdNum" placeholder="Número de ND (ej. BD01-00000123)" style="width:230px;">
+      <input type="date" id="ncNdFecha" value="${toIso(st.corte)}">
+      <button class="v-meta-save nc-mini" data-nd-guardar="${esc(n.doc)}">Guardar</button><button class="clear-btn nc-mini" data-nd-cancelar>Cancelar</button></div></td></tr>`;
+  }
+  async function guardarND(doc, quitar) {
+    const factura = st.det, ancla = $('ncDetalle') ? $('ncDetalle').previousElementSibling : null;
+    if (quitar) delete D.ajustes.marcas[doc];
+    else {
+      const nd = ($('ncNdNum')?.value || '').trim();
+      if (!nd) { $('ncNdNum').focus(); return; }
+      D.ajustes.marcas[doc] = { tipo: 'nd', nd, ndFecha: ($('ncNdFecha')?.value || '').replace(/-/g, '/'), ...(await firma()) };
+    }
+    st.ndForm = null;
+    await guardarAjustes(quitar ? 'Quitando regularización...' : 'Guardando nota de débito...');
+    if (factura && ancla) abrirDetalle(factura, ancla);
+  }
+
   function quitarDetalle() { st.det = null; const b = $('ncDetalle'); if (b) b.remove(); }
   function cerrarDetalle() { quitarDetalle(); renderPanelActual(); }
   function renderPanelActual() { if (st.tab === 'concil') renderConcil(); else if (st.tab === 'documentos') renderDocs(); else if (st.tab === 'anuladas') renderAnuladas(); }
@@ -336,8 +375,8 @@
     const doc = st.det; if (!doc) return;
     const f = R.facturas[doc], ncs = ncsDeFactura(doc), venta = f ? f.venta : 0;
     xlsx(`nc_factura_${doc}.xlsx`, [{ name: 'Detalle', title: `NOTAS DE CRÉDITO · Factura ${doc}`, subtitle: `${(f && f.nombre) || ''} · ${f ? fD(f.fecha) + ' · ' + fS(venta * C.IGV) : 'no está en Ventas'}`,
-      columns: [{ header: 'Nota de crédito', width: 18, code: true }, { header: 'Serie', code: true }, { header: 'Número', code: true }, { header: 'Emisión', width: 12 }, { header: 'Estado', width: 18 }, { header: 'Anulada', width: 12 }, { header: 'Asume' }, { header: 'Motivo', width: 28 }, { header: 's/IGV', fmt: M2 }, { header: 'c/IGV', fmt: M2 }, { header: '%', fmt: PCT }],
-      rows: ncs.map(n => [n.doc, n.sersun, n.numsun, fD(n.fecha), n.estadoTxt === 'vigente' ? 'Vigente' : 'Anulada · ' + (CLASE[n.clase] || ''), n.fecanu ? fD(n.fecanu) : '', n.cargo === 'N' ? 'Nestlé' : 'ST', n.motivo, n.subRef, n.montoRef, venta ? n.subRef / venta : '']) }]);
+      columns: [{ header: 'Nota de crédito', width: 18, code: true }, { header: 'Serie', code: true }, { header: 'Número', code: true }, { header: 'Doc. referencia', width: 18, code: true }, { header: 'Emisión', width: 12 }, { header: 'Estado', width: 18 }, { header: 'Anulada', width: 12 }, { header: 'Asume' }, { header: 'Motivo', width: 28 }, { header: 's/IGV', fmt: M2 }, { header: 'c/IGV', fmt: M2 }, { header: '%', fmt: PCT }],
+      rows: ncs.map(n => [n.doc, n.sersun, n.numsun, refDe(n), fD(n.fecha), n.estadoTxt === 'vigente' ? 'Vigente' : 'Anulada · ' + (CLASE[n.clase] || ''), n.fecanu ? fD(n.fecanu) : '', n.cargo === 'N' ? 'Nestlé' : 'ST', n.motivo, n.subRef, n.montoRef, venta ? n.subRef / venta : '']) }]);
   }
 
   // ---------------- Guardar marcas y ajustes ----------------
@@ -428,8 +467,8 @@
     return { name: 'Diario por serie', title: `NOTAS DE CRÉDITO · Diario por serie (${k === 'c' ? 'con' : 'sin'} IGV)`, subtitle: sub(), columns: cols, rows, totals };
   }
   function hojaAnuladas() {
-    return { name: 'Anuladas', title: 'NOTAS DE CRÉDITO · Anuladas', subtitle: sub(), columns: [{ header: 'Nota de crédito', width: 18, code: true }, { header: 'Emisión', width: 12 }, { header: 'Anulada', width: 12 }, { header: 'Cliente', code: true }, { header: 'Asume' }, { header: 'Monto', fmt: M2 }, { header: 'Origen' }, { header: 'Clasificación' }],
-      rows: R.anuladas.map(a => [a.doc, fD(a.fecha), a.fecanu ? fD(a.fecanu) : '', a.codcli, a.cargo === 'N' ? 'Nestlé' : 'ST', a.montoAnulada, a.origen, CLASE[a.clase]]) };
+    return { name: 'Anuladas', title: 'NOTAS DE CRÉDITO · Anuladas', subtitle: sub(), columns: [{ header: 'Nota de crédito', width: 18, code: true }, { header: 'Doc. referencia', width: 18, code: true }, { header: 'Emisión', width: 12 }, { header: 'Anulada', width: 12 }, { header: 'Cliente', code: true }, { header: 'Asume' }, { header: 'Monto', fmt: M2 }, { header: 'Origen' }, { header: 'Clasificación' }],
+      rows: R.anuladas.map(a => [a.doc, facturaDeAnulada(a), fD(a.fecha), a.fecanu ? fD(a.fecanu) : '', a.codcli, a.cargo === 'N' ? 'Nestlé' : 'ST', a.montoAnulada, a.origen, CLASE[a.clase]]) };
   }
   function hojaConcil(soloPend) {
     const c = R.concil; if (!c) return null;
@@ -509,6 +548,10 @@
       });
       st.anu.cambios = {}; await guardarAjustes('Guardando clasificación...');
     });
+    const anuF = () => { st.anu.q = $('ncAnuBuscar').value; st.anu.cargo = $('ncAnuCargo').value; st.anu.origen = $('ncAnuOrigen').value; st.anu.desde = ($('ncAnuDesde').value || '').replace(/-/g, '/'); st.anu.hasta = ($('ncAnuHasta').value || '').replace(/-/g, '/'); st.anu.page = 0; renderAnuladas(); };
+    $('ncAnuBuscar').addEventListener('input', anuF);
+    ['ncAnuCargo', 'ncAnuOrigen', 'ncAnuDesde', 'ncAnuHasta'].forEach(id => $(id).addEventListener('change', anuF));
+    $('ncAnuLimpiar').addEventListener('click', () => { ['ncAnuBuscar', 'ncAnuDesde', 'ncAnuHasta'].forEach(id => { $(id).value = ''; }); $('ncAnuCargo').value = 'all'; $('ncAnuOrigen').value = 'all'; anuF(); });
     $('ncAnuPrev').addEventListener('click', () => { st.anu.page = Math.max(0, st.anu.page - 1); renderAnuladas(); });
     $('ncAnuNext').addEventListener('click', () => { st.anu.page++; renderAnuladas(); });
     // Conciliación
@@ -565,6 +608,13 @@
       const td = e.target.closest('td[data-det]');
       if (td && !td.closest('#ncDetalle')) { abrirDetalle(td.dataset.det, td.closest('.card')); return; }
       if (e.target.id === 'ncDetCerrar') cerrarDetalle();
+      const nb = e.target.closest('[data-nd-abrir],[data-nd-guardar],[data-nd-quitar],[data-nd-cancelar]');
+      if (nb) {
+        if (nb.dataset.ndAbrir) { st.ndForm = nb.dataset.ndAbrir; abrirDetalle(st.det, $('ncDetalle').previousElementSibling); setTimeout(() => $('ncNdNum') && $('ncNdNum').focus(), 50); }
+        else if (nb.dataset.ndGuardar) guardarND(nb.dataset.ndGuardar, false);
+        else if (nb.dataset.ndQuitar) guardarND(nb.dataset.ndQuitar, true);
+        else { st.ndForm = null; abrirDetalle(st.det, $('ncDetalle').previousElementSibling); }
+      }
       if (e.target.id === 'ncDetExcel') exportDetalle();
     });
   }

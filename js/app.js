@@ -390,7 +390,7 @@ function buildDocToChoferMap(transportistas) {
       // invisible (saltos de línea, espacios) en vez de estar realmente
       // vacías — hay que limpiarlas o JS las trata como "con contenido".
       const desmotClean = (r.desmot == null ? '' : String(r.desmot)).replace(/[\r\n]+/g, '').trim();
-      map[doc] = { codcho: r.codcho || null, nomcho: r.nomcho || r.codcho || null, desmot: desmotClean || null, desmotOriginal: desmotClean || null, pde: r.nrodsp || null };
+      map[doc] = { codcho: r.codcho || null, nomcho: r.nomcho || r.codcho || null, desmot: desmotClean || null, desmotOriginal: desmotClean || null, pde: r.nrodsp || null, fechaPde: toISO(r.fecemi) };
     }
   });
   return map;
@@ -1406,6 +1406,8 @@ function renderAll() {
 
 let PDE_SEARCH = '';
 let PDE_PAGE = 0;
+let PDE_DESDE = '';   // 'YYYY-MM-DD' (filtro por fecha del PDE = día del despacho)
+let PDE_HASTA = '';
 
 function renderPdes() {
   // Uno por PDE (varios documentos comparten el mismo PDE = mismo reparto),
@@ -1413,7 +1415,7 @@ function renderPdes() {
   const byPde = {};
   Object.values(LAST_DOC_TO_CHOFER).forEach(hit => {
     if (!hit.pde) return;
-    if (!byPde[hit.pde]) byPde[hit.pde] = hit;
+    if (!byPde[hit.pde] || (hit.fechaPde && (!byPde[hit.pde].fechaPde || hit.fechaPde < byPde[hit.pde].fechaPde))) byPde[hit.pde] = { ...(byPde[hit.pde] || hit), fechaPde: hit.fechaPde || (byPde[hit.pde] && byPde[hit.pde].fechaPde) };
   });
   // Aplica correcciones ya guardadas.
   Object.keys(byPde).forEach(pde => {
@@ -1436,7 +1438,8 @@ function renderPdes() {
   const rows = allEntries
     .filter(h => huamaniCod ? h.codcho === huamaniCod : false)
     .filter(h => !q || String(h.pde).toLowerCase().includes(q))
-    .sort((a, b) => String(a.pde).localeCompare(String(b.pde)));
+    .filter(h => (!PDE_DESDE || (h.fechaPde && h.fechaPde >= PDE_DESDE)) && (!PDE_HASTA || (h.fechaPde && h.fechaPde <= PDE_HASTA)))
+    .sort((a, b) => String(a.fechaPde || '').localeCompare(String(b.fechaPde || '')) || String(a.pde).localeCompare(String(b.pde)));
 
   const pageSize = 30;
   const maxPage = Math.max(0, Math.ceil(rows.length / pageSize) - 1);
@@ -1451,11 +1454,13 @@ function renderPdes() {
   const choferesList = getKnownChoferes(); // se calcula UNA vez para toda la página, no por fila
 
   const table = document.getElementById('pde-table');
-  table.querySelector('thead').innerHTML = `<tr><th>PDE</th><th>Chofer</th></tr>`;
+  table.querySelector('thead').innerHTML = `<tr><th style="text-align:center">Fecha</th><th>PDE</th><th>Chofer</th></tr>`;
   const tbody = table.querySelector('tbody');
   tbody.innerHTML = '';
   pageRows.forEach(h => {
     const tr = el('tr');
+    const f = h.fechaPde ? `${h.fechaPde.slice(8, 10)}/${h.fechaPde.slice(5, 7)}/${h.fechaPde.slice(0, 4)}` : '—';
+    const tdF = el('td', 'mono', f); tdF.style.textAlign = 'center'; tr.appendChild(tdF);
     tr.appendChild(el('td', 'mono', h.pde));
     const td = el('td');
     if (h.choferCorregido) {
@@ -1523,6 +1528,8 @@ function wireEvents() {
   document.getElementById('exportConductorCSV').addEventListener('click', exportConductorCSV);
   document.getElementById('exportVendedorCSV').addEventListener('click', exportVendedorCSV);
   document.getElementById('pdeSearch').addEventListener('input', e => { PDE_SEARCH = e.target.value; PDE_PAGE = 0; renderPdes(); });
+  document.getElementById('pdeDesde').addEventListener('change', e => { PDE_DESDE = e.target.value || ''; PDE_PAGE = 0; renderPdes(); });
+  document.getElementById('pdeHasta').addEventListener('change', e => { PDE_HASTA = e.target.value || ''; PDE_PAGE = 0; renderPdes(); });
   document.getElementById('pdePrev').addEventListener('click', () => { PDE_PAGE = Math.max(0, PDE_PAGE - 1); renderPdes(); });
   document.getElementById('pdeNext').addEventListener('click', () => { PDE_PAGE += 1; renderPdes(); });
 }

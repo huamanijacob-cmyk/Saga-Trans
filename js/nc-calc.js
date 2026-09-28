@@ -146,11 +146,18 @@
       const f = fac[r.refDoc];
       r.factura = f || null;
       r.producto = (alexKey[r.refDoc] && alexKey[r.refDoc].producto) || '';
-      if (m && m.tipo === 'adicional') { r.grupo = 'adicional'; r.etiqueta = m.etiqueta || ''; }
+      if (m && m.tipo === 'nd') { r.grupo = 'regularizada'; r.nd = m.nd || ''; r.ndFecha = m.ndFecha || ''; r.etiqueta = m.nd ? `ND ${m.nd}` : 'Regularizada'; }
+      else if (m && m.tipo === 'adicional') { r.grupo = 'adicional'; r.etiqueta = m.etiqueta || ''; }
       else if (f && f.cat === CAT_PANETON) r.grupo = 'paneton';
       else r.grupo = 'regular';
     });
 
+    // NC duplicadas: misma factura, mismo cargo y mismo monto, 2 o más vigentes (se marca la más reciente)
+    const dupKey = {};
+    vig.filter(r => r.grupo !== 'regularizada' && r.refDoc).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.doc.localeCompare(b.doc)).forEach(r => {
+      const k = `${r.refDoc}|${r.cargo}|${r.mondoc.toFixed(2)}`;
+      if (dupKey[k]) r.duplicada = dupKey[k]; else dupKey[k] = r.doc;
+    });
     const suma = (arr, cargo, campo) => arr.filter(r => !cargo || r.cargo === cargo).reduce((s, r) => s + r[campo], 0);
     const reg = vig.filter(r => r.grupo === 'regular');
     const ajN = manuales.filter(a => a.cargo === 'N').reduce((s, a) => s + num(a.monto), 0);
@@ -161,6 +168,7 @@
       ajN, ajS,
       adicional: suma(vig.filter(r => r.grupo === 'adicional'), null, 'mondoc'),
       paneton: suma(vig.filter(r => r.grupo === 'paneton'), null, 'mondoc'),
+      regularizada: suma(vig.filter(r => r.grupo === 'regularizada'), null, 'mondoc'),
     };
     tot.total = tot.N + tot.S; tot.totals = tot.Ns + tot.Ss;
     const soDia = sellOut(ventas, desde, corte);
@@ -190,16 +198,18 @@
     // rechazo/parcial porque la factura tuvo devolución (D en Ventas o nota de devolución PDP).
     nc.filter(r => r.tipped === 'PDP' && r.refDoc).forEach(r => conDevolucion.add(r.refDoc));
     const sis = {};
-    vig.forEach(r => { if (!r.refDoc) return; const x = (sis[r.refDoc] = sis[r.refDoc] || { N: 0, S: 0, ncs: [] }); x[r.cargo] += r.mondoc; x.ncs.push(r.doc); });
+    vig.forEach(r => { if (!r.refDoc || r.grupo === 'regularizada') return; const x = (sis[r.refDoc] = sis[r.refDoc] || { N: 0, S: 0, ncs: [], dup: { N: 0, S: 0 } }); x[r.cargo] += r.mondoc; x.ncs.push(r.doc); if (r.duplicada) x.dup[r.cargo] += r.mondoc; });
+    const finVentas = Object.values(fac).reduce((m, f) => (f.fecha > m ? f.fecha : m), '');
     (alex || []).forEach(a => {
       const x = sis[a.doc], dev = conDevolucion.has(a.doc);
       const iguales = x && Math.abs(a.nmonto - x.N) <= 0.05 && Math.abs(a.smonto - x.S) <= 0.05;
       a.auto = false;
       if (a.obs === 'RECHAZO') a.estado = 'rechazo';
       else if (a.obs === 'PARCIAL') a.estado = 'parcial';
-      else if (!x && !fac[a.doc]) { a.estado = 'facanulada'; a.auto = true; }   // la factura ya no está en Ventas: se anuló
+      else if (!x && !fac[a.doc] && a.fecha <= finVentas) { a.estado = 'facanulada'; a.auto = true; }   // la factura ya no está en Ventas: se anuló
       else if (!x) { a.estado = dev ? 'rechazo' : 'falta'; a.auto = dev; }
       else if (iguales) a.estado = 'coincide';
+      else if ((x.dup.N || x.dup.S) && Math.abs(a.nmonto - (x.N - x.dup.N)) <= 0.05 && Math.abs(a.smonto - (x.S - x.dup.S)) <= 0.05) { a.estado = 'duplicada'; a.auto = true; }
       else if (Math.abs((a.nmonto + a.smonto) - (x.N + x.S)) <= 0.05) a.estado = 'reparto';   // mismo total, distinto quién asume
       else { a.estado = dev ? 'parcial' : 'distinto'; a.auto = dev; }
     });
@@ -281,7 +291,8 @@
       const key = r.refDoc || r.doc;
       const f = r.factura;
       const d = (docs[key] = docs[key] || { factura: r.refDoc, fecha: f ? f.fecha : r.fecha, cli: f ? f.cli : r.codcli, cliente: f ? f.nombre : r.razsoc, venta: f ? f.venta : 0, N: 0, S: 0, Ns: 0, Ss: 0, ncs: [], grupo: r.grupo, etiqueta: r.etiqueta || '', producto: r.producto, vendedor: r.vendedor });
-      d[r.cargo] += r.mondoc; d[r.cargo + 's'] += r.presub; d.ncs.push(r.doc);
+      if (r.grupo !== 'regularizada') { d[r.cargo] += r.mondoc; d[r.cargo + 's'] += r.presub; }   // la regularizada con ND ya no cuenta
+      d.ncs.push(r.doc);
       if (r.grupo !== 'regular') { d.grupo = r.grupo; d.etiqueta = r.etiqueta || d.etiqueta; }
     });
     const documentos = Object.values(docs).map(d => ({
