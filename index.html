@@ -321,6 +321,10 @@
                 <label>Buscar PDE</label>
                 <input type="text" id="pdeSearch" placeholder="Buscar por número de PDE...">
               </div>
+              <div class="filter-field">
+                <label>Fecha del PDE</label>
+                <div class="range-inputs"><input type="date" id="pdeDesde"><span>–</span><input type="date" id="pdeHasta"></div>
+              </div>
             </div>
           </div>
           <div class="note" id="pdeResultLabel"></div>
@@ -631,6 +635,15 @@
             <div class="no-print section-head">
               <div class="kpi-grid kpi-grid-3" id="ncAnuKpis" style="flex:1;"></div>
             </div>
+            <div class="card filter-card no-print">
+              <div class="filter-row">
+                <div class="filter-field" style="min-width:240px;"><label for="ncAnuBuscar">Buscar</label><input type="text" id="ncAnuBuscar" placeholder="NC, factura o cliente..."></div>
+                <div class="filter-field"><label for="ncAnuCargo">Asume</label><select id="ncAnuCargo"><option value="all">Todos</option><option value="N">Nestlé</option><option value="S">ST</option></select></div>
+                <div class="filter-field"><label for="ncAnuOrigen">Origen del monto</label><select id="ncAnuOrigen"><option value="all">Todos</option><option value="alex">Alex</option><option value="registro">Registro</option><option value="manual">Manual</option><option value="">Sin monto</option></select></div>
+                <div class="filter-field"><label>Emisión</label><div class="range-inputs"><input type="date" id="ncAnuDesde"><span>–</span><input type="date" id="ncAnuHasta"></div></div>
+                <button class="clear-btn" id="ncAnuLimpiar">Limpiar</button>
+              </div>
+            </div>
             <div class="no-print toolbar">
               <div class="segmented" id="ncAnuFiltro"><button class="tab-btn tab-active" data-f="todas">Todas</button><button class="tab-btn" data-f="rechazo">Rechazo</button><button class="tab-btn" data-f="parcial">Parcial</button><button class="tab-btn" data-f="error">Error</button></div>
               <button class="v-meta-save" id="ncAnuGuardar" style="display:none;">Guardar cambios</button>
@@ -672,7 +685,7 @@
             <div class="card filter-card no-print">
               <div class="filter-row">
                 <div class="filter-field"><label for="ncDocBuscar">Buscar</label><input type="text" id="ncDocBuscar" placeholder="Factura, NC, código o cliente..."></div>
-                <div class="filter-field"><label for="ncDocGrupo">Grupo</label><select id="ncDocGrupo"><option value="all">Todos</option><option value="regular">Regular</option><option value="adicional">Adicional</option><option value="paneton">Panetón</option></select></div>
+                <div class="filter-field"><label for="ncDocGrupo">Grupo</label><select id="ncDocGrupo"><option value="all">Todos</option><option value="regular">Regular</option><option value="adicional">Adicional</option><option value="paneton">Panetón</option><option value="regularizada">Regularizada (ND)</option></select></div>
                 <button class="clear-btn" id="ncDocLimpiar">Limpiar</button>
               </div>
             </div>
