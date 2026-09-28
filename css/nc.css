@@ -43,3 +43,9 @@
 .nc-det-b span{display:block;font-size:12px;color:var(--muted);margin-top:2px;}
 tr.nc-abierta td{background:#EEF2F9 !important;}
 @media (max-width:900px){ .nc-det-g{grid-template-columns:1fr;} }
+
+.nc-regularizada{background:#EDE7F6;color:#5B3FA0;}
+.nc-duplicada{background:#FDEEEA;color:var(--red);}
+.nc-nd-form td{background:#FBF9F4 !important;}
+.nc-nd-form input{height:32px;padding:0 8px;border:1px solid var(--card-border);border-radius:8px;background:#fff;font-family:'IBM Plex Mono',monospace;font-size:13px;}
+.nc-mini{height:28px;padding:0 10px;font-size:12px;}
