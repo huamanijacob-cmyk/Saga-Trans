@@ -77,7 +77,8 @@
         <!-- Header -->
         <div class="page-header">
           <div>
-            <div class="eyebrow">Rechazos · Saga Trans Confitería</div>
+            <button class="nav-back no-print" data-nav-back hidden><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>Regresar</span></button>
+              <div class="eyebrow">Rechazos · Saga Trans Confitería</div>
             <h1 class="page-title">Panel de Rechazos</h1>
             <div class="subtitle">Corte al <span id="corteLabel">—</span></div>
           </div>
@@ -348,6 +349,7 @@
 
           <div class="page-header">
             <div>
+              <button class="nav-back no-print" data-nav-back hidden><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>Regresar</span></button>
               <div class="eyebrow">Ventas · Saga Trans Confitería</div>
               <h1 class="page-title">Panel de Ventas</h1>
               <div class="subtitle">Corte al <span id="vCorteLabel">—</span></div>
@@ -576,6 +578,7 @@
         <div class="wrap" id="modNC" style="display:none;">
           <div class="page-header">
             <div>
+              <button class="nav-back no-print" data-nav-back hidden><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>Regresar</span></button>
               <div class="eyebrow">Notas de crédito · Saga Trans Confitería</div>
               <h1 class="page-title">Panel de Notas de Crédito</h1>
               <div class="subtitle">Corte al <span id="ncCorteLabel">—</span><span id="ncAlexLabel"></span></div>
@@ -601,10 +604,7 @@
               <input type="file" id="ncAlexFile" accept=".xlsx,.xls" style="display:none;">
               <button class="export-btn" id="ncBtnRecargar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg> Actualizar datos</button>
             </div>
-            <div class="export-group">
-              <button class="export-btn" id="ncReportePdf"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg> Reporte diario PDF</button>
-              <button class="export-btn" id="ncReporteXlsx"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Reporte diario Excel</button>
-            </div>
+
           </div>
           <div class="v-avisos no-print" id="ncAvisos"></div>
 
@@ -619,20 +619,25 @@
           </div>
 
           <section class="tab-panel" id="ncpanel-resumen">
+            <div class="no-print section-head"><div class="section-title">Resumen · <span class="ncCorteInline">—</span></div><div class="export-group"><button class="export-btn" data-ncprint="resumen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg> Descargar PDF</button><button class="export-btn" id="ncImgResumen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg> Descargar gráfico</button><button class="export-btn" data-ncxlsx="resumen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div></div>
+            <div class="print-title"><div class="print-title-main">Notas de crédito · Resumen</div><div class="print-title-sub">Saga Trans Confitería · Corte al <span class="ncCorteInline">—</span></div></div>
             <div class="kpi-grid kpi-grid-4" id="ncKpis1"></div>
             <div class="kpi-grid kpi-grid-4" id="ncKpis2"></div>
             <div class="card v-chart-card"><div class="section-title" id="ncCurvaTitulo" style="margin-bottom:8px;">% Descuentos ST</div><div class="v-chart-box"><canvas id="ncCurva" role="img" aria-label="Porcentaje acumulado de descuentos ST por día"></canvas></div></div>
           </section>
 
           <section class="tab-panel" id="ncpanel-diario" style="display:none;">
+            <div class="no-print section-head"><div class="section-title">Diario por serie · <span class="ncCorteInline">—</span></div><div class="export-group"><button class="export-btn" data-ncprint="diario"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg> Descargar PDF</button><button class="export-btn" data-ncxlsx="diario"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div></div>
+            <div class="print-title"><div class="print-title-main">Notas de crédito · Diario por serie</div><div class="print-title-sub">Saga Trans Confitería · Corte al <span class="ncCorteInline">—</span></div></div>
             <div class="no-print section-head">
               <div class="segmented" id="ncIgvSel"><button class="tab-btn tab-active" data-igv="c">Con IGV</button><button class="tab-btn" data-igv="s">Sin IGV</button></div>
-              <button class="export-btn" id="ncExportDiario"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button>
             </div>
             <div class="card"><div class="table-scroll"><table class="v-table" id="ncDiarioTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div></div>
           </section>
 
           <section class="tab-panel" id="ncpanel-anuladas" style="display:none;">
+            <div class="no-print section-head"><div class="section-title">Anuladas · <span class="ncCorteInline">—</span></div><div class="export-group"><button class="export-btn" data-ncprint="anuladas"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg> Descargar PDF</button><button class="export-btn" data-ncxlsx="anuladas"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div></div>
+            <div class="print-title"><div class="print-title-main">Notas de crédito · Anuladas</div><div class="print-title-sub">Saga Trans Confitería · Corte al <span class="ncCorteInline">—</span></div></div>
             <div class="no-print section-head">
               <div class="kpi-grid kpi-grid-3" id="ncAnuKpis" style="flex:1;"></div>
             </div>
@@ -650,27 +655,32 @@
               <button class="v-meta-save" id="ncAnuGuardar" style="display:none;">Guardar cambios</button>
             </div>
             <div class="card"><div class="table-scroll"><table class="v-table" id="ncAnuTable"><thead></thead><tbody></tbody></table></div></div>
-            <div class="doc-footer"><div></div><div class="pager"><button class="page-btn" id="ncAnuPrev">&larr;</button><span id="ncAnuPage"></span><button class="page-btn" id="ncAnuNext">&rarr;</button></div></div>
+            <div class="doc-footer no-print"><div></div><div class="pager"><button class="page-btn" id="ncAnuPrev">&larr;</button><span id="ncAnuPage"></span><button class="page-btn" id="ncAnuNext">&rarr;</button></div></div>
           </section>
 
           <section class="tab-panel" id="ncpanel-concil" style="display:none;">
+            <div class="no-print section-head"><div class="section-title">Conciliación Alex · <span class="ncCorteInline">—</span></div><div class="export-group"><button class="export-btn" data-ncprint="concil"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg> Descargar PDF</button><button class="export-btn" data-ncxlsx="concil"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div></div>
+            <div class="print-title"><div class="print-title-main">Notas de crédito · Conciliación Alex</div><div class="print-title-sub">Saga Trans Confitería · Corte al <span class="ncCorteInline">—</span></div></div>
             <div id="ncConcilVacio" class="empty-state" style="display:none;"><div class="empty-title">Todavía no hay archivo de Alex para este mes</div><button class="export-btn" id="ncBtnAlex2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg> Subir archivo de Alex</button></div>
             <div id="ncConcilBox">
               <div class="kpi-grid" id="ncConKpis" style="grid-template-columns:repeat(6,minmax(0,1fr));"></div>
-              <div class="no-print section-head"><div class="section-title" id="ncConTitulo"></div><button class="export-btn" id="ncExportConcil"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div>
+              <div class="section-head"><div class="section-title" id="ncConTitulo"></div></div>
               <div class="card"><div class="table-scroll"><table class="v-table" id="ncConTable"><thead></thead><tbody></tbody></table></div></div>
-              <div class="doc-footer"><div></div><div class="pager"><button class="page-btn" id="ncConPrev">&larr;</button><span id="ncConPage"></span><button class="page-btn" id="ncConNext">&rarr;</button></div></div>
+              <div class="doc-footer no-print"><div></div><div class="pager"><button class="page-btn" id="ncConPrev">&larr;</button><span id="ncConPage"></span><button class="page-btn" id="ncConNext">&rarr;</button></div></div>
               <div class="section-head"><div class="section-title">Sr. Alex · diario</div><button class="v-meta-save" id="ncCorreoGuardar" style="display:none;">Guardar montos del correo</button></div>
               <div class="card"><div class="table-scroll"><table class="v-table" id="ncSrAlexTable"><thead></thead><tbody></tbody></table></div></div>
             </div>
           </section>
 
           <section class="tab-panel" id="ncpanel-producto" style="display:none;">
-            <div class="no-print section-head"><div></div><button class="export-btn" id="ncExportProd"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div>
+            <div class="no-print section-head"><div class="section-title">Por producto · <span class="ncCorteInline">—</span></div><div class="export-group"><button class="export-btn" data-ncprint="producto"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg> Descargar PDF</button><button class="export-btn" data-ncxlsx="producto"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div></div>
+            <div class="print-title"><div class="print-title-main">Notas de crédito · Por producto</div><div class="print-title-sub">Saga Trans Confitería · Corte al <span class="ncCorteInline">—</span></div></div>
             <div class="card"><div class="table-scroll"><table class="v-table" id="ncProdTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div></div>
           </section>
 
           <section class="tab-panel" id="ncpanel-ajustes" style="display:none;">
+            <div class="no-print section-head"><div class="section-title">Ajustes · <span class="ncCorteInline">—</span></div><div class="export-group"><button class="export-btn" data-ncprint="ajustes"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg> Descargar PDF</button><button class="export-btn" data-ncxlsx="ajustes"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div></div>
+            <div class="print-title"><div class="print-title-main">Notas de crédito · Ajustes</div><div class="print-title-sub">Saga Trans Confitería · Corte al <span class="ncCorteInline">—</span></div></div>
             <div class="card filter-card no-print">
               <div class="filter-row">
                 <div class="filter-field" style="min-width:240px;"><label for="ncAjConcepto">Ajuste manual</label><input type="text" id="ncAjConcepto" placeholder="Concepto (ej. Correo reparto)"></div>
@@ -683,6 +693,8 @@
           </section>
 
           <section class="tab-panel" id="ncpanel-documentos" style="display:none;">
+            <div class="no-print section-head"><div class="section-title">Documentos · <span class="ncCorteInline">—</span></div><div class="export-group"><button class="export-btn" data-ncprint="documentos"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg> Descargar PDF</button><button class="export-btn" data-ncxlsx="documentos"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div></div>
+            <div class="print-title"><div class="print-title-main">Notas de crédito · Documentos</div><div class="print-title-sub">Saga Trans Confitería · Corte al <span class="ncCorteInline">—</span></div></div>
             <div class="card filter-card no-print">
               <div class="filter-row">
                 <div class="filter-field"><label for="ncDocBuscar">Buscar</label><input type="text" id="ncDocBuscar" placeholder="Factura, NC, código o cliente..."></div>
@@ -691,12 +703,10 @@
               </div>
             </div>
             <div class="pendiente-banner v-ext no-print" id="ncSelBar" style="display:none;"></div>
-            <div class="no-print doc-toolbar"><div></div><button class="export-btn" id="ncExportDocs"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Descargar Excel</button></div>
             <div class="card"><div class="table-scroll"><table class="v-table" id="ncDocTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div></div>
-            <div class="doc-footer"><div></div><div class="pager"><button class="page-btn" id="ncDocPrev">&larr;</button><span id="ncDocPage"></span><button class="page-btn" id="ncDocNext">&rarr;</button></div></div>
+            <div class="doc-footer no-print"><div></div><div class="pager"><button class="page-btn" id="ncDocPrev">&larr;</button><span id="ncDocPage"></span><button class="page-btn" id="ncDocNext">&rarr;</button></div></div>
           </section>
 
-          <div class="nc-reporte" id="ncReporte"></div>
         </div>
         <!-- ===== FIN MÓDULO NOTAS DE CRÉDITO ===== -->
 
@@ -728,6 +738,7 @@
   <script src="js/nc-calc.js?v=1.0"></script>
   <script src="js/nc.js?v=1.0"></script>
   <script src="js/subir.js?v=1.0"></script>
+  <script src="js/nav.js?v=1.0"></script>
 <script>document.getElementById('loginVersion').textContent = 'versión ' + PANEL_VERSION;</script>
 </body>
 </html>
