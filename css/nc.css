@@ -49,3 +49,8 @@ tr.nc-abierta td{background:#EEF2F9 !important;}
 .nc-nd-form td{background:#FBF9F4 !important;}
 .nc-nd-form input{height:32px;padding:0 8px;border:1px solid var(--card-border);border-radius:8px;background:#fff;font-family:'IBM Plex Mono',monospace;font-size:13px;}
 .nc-mini{height:28px;padding:0 10px;font-size:12px;}
+
+/* Botón "Regresar" (js/nav.js) — en los tres módulos */
+.nav-back{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;margin-bottom:10px;border-radius:9px;background:#EEF2F9;border:1px solid #C9D6EC;color:var(--navy);font-size:13px;font-weight:500;}
+.nav-back:hover{background:#E1E9F6;border-color:var(--brand);}
+.nav-back[hidden]{display:none;}
