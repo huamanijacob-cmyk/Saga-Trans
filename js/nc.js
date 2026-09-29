@@ -34,6 +34,31 @@
   };
   let D = null, R = null, CHART = null;
   window.NCMOD = { state: st, get data() { return D; }, get res() { return R; } };
+  const TAB_TXT = { resumen: 'Resumen', diario: 'Diario por serie', anuladas: 'Anuladas', concil: 'Conciliación Alex', producto: 'Por producto', ajustes: 'Ajustes', documentos: 'Documentos' };
+  const TABLA_TAB = { concil: 'ncConTable', documentos: 'ncDocTable', anuladas: 'ncAnuTable' };
+  // Abre el detalle de una factura (lo usan Rechazos y Ventas)
+  NCMOD.abrirFactura = async doc => {
+    await abrir();
+    if (!R) return;
+    st.doc = { ...st.doc, buscar: doc, grupo: 'all', page: 0 };
+    $('ncDocBuscar').value = doc; $('ncDocGrupo').value = 'all';
+    setTab('documentos'); renderDocs();
+    abrirDetalle(doc, $('ncDocTable').closest('.card'));
+  };
+  // Para el botón "Regresar"
+  NCMOD.nav = {
+    snapshot: () => ({ tab: st.tab, igv: st.igv, anu: { ...st.anu, cambios: {} }, con: { ...st.con }, doc: { buscar: st.doc.buscar, grupo: st.doc.grupo, page: st.doc.page }, det: st.det }),
+    restore: async s => {
+      await abrir();
+      st.igv = s.igv; Object.assign(st.anu, s.anu); Object.assign(st.con, s.con); Object.assign(st.doc, s.doc);
+      $('ncDocBuscar').value = st.doc.buscar; $('ncDocGrupo').value = st.doc.grupo;
+      $('ncAnuBuscar').value = st.anu.q; $('ncAnuCargo').value = st.anu.cargo; $('ncAnuOrigen').value = st.anu.origen;
+      $('ncAnuDesde').value = toIso(st.anu.desde); $('ncAnuHasta').value = toIso(st.anu.hasta);
+      setTab(s.tab); if (R) renderTodo();
+      if (s.det && TABLA_TAB[s.tab] && R) abrirDetalle(s.det, $(TABLA_TAB[s.tab]).closest('.card'));
+    },
+    etiqueta: () => (TAB_TXT[st.tab] || '') + (st.det ? ` · ${st.det}` : ''),
+  };
 
   // ---------------- Formato ----------------
   const pad = n => String(n).padStart(2, '0');
@@ -136,6 +161,7 @@
   function renderTodo() {
     if (!R) return;
     $('ncCorteLabel').textContent = largo(st.corte);
+    document.querySelectorAll('.ncCorteInline').forEach(e => { e.textContent = largo(st.corte); });
     const fa = D.alex.length ? D.alex.map(a => a.fecha).sort().slice(-1)[0] : '';
     $('ncAlexLabel').textContent = D.alex.length ? ` · Alex actualizado al ${fD(fa).slice(0, 5)}` : ' · sin archivo de Alex';
     renderResumen(); renderDiario(); renderAnuladas(); renderConcil(); renderProducto(); renderAjustes(); renderDocs();
@@ -188,22 +214,13 @@
   }
 
   function renderAnuladas() {
-    const q = st.anu.q.trim().toLowerCase();
-    const A = R.anuladas.filter(a => {
-      const fa = facturaDeAnulada(a);
-      if (q && !(a.doc.toLowerCase().includes(q) || fa.toLowerCase().includes(q) || a.codcli.includes(q))) return false;
-      if (st.anu.cargo !== 'all' && a.cargo !== st.anu.cargo) return false;
-      if (st.anu.origen !== 'all' && (a.origen || '') !== st.anu.origen) return false;
-      if (st.anu.desde && a.fecha < st.anu.desde) return false;
-      if (st.anu.hasta && a.fecha > st.anu.hasta) return false;
-      return true;
-    });
+    const A = anuladasFiltradas();
     const cuenta = c => A.filter(a => a.clase === c);
     const monto = arr => arr.reduce((s, a) => s + a.montoAnulada, 0);
     $('ncAnuKpis').innerHTML = kpi('red', 'Rechazo', fN(cuenta('rechazo').length), fS(monto(cuenta('rechazo')))) + kpi('amber', 'Parcial', fN(cuenta('parcial').length), fS(monto(cuenta('parcial')))) + kpi('navy', 'Error', fN(cuenta('error').length));
     document.querySelectorAll('#ncAnuFiltro .tab-btn').forEach(b => b.classList.toggle('tab-active', b.dataset.f === st.anu.filtro));
     const lista = A.filter(a => st.anu.filtro === 'todas' || a.clase === st.anu.filtro).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.doc.localeCompare(b.doc));
-    const per = CFG.POR_PAG, max = Math.max(0, Math.ceil(lista.length / per) - 1); st.anu.page = Math.min(st.anu.page, max);
+    const per = st.printAll ? 1e9 : CFG.POR_PAG, max = Math.max(0, Math.ceil(lista.length / per) - 1); st.anu.page = Math.min(st.anu.page, max);
     $('ncAnuPage').textContent = `${st.anu.page + 1} / ${max + 1}`; $('ncAnuPrev').disabled = st.anu.page === 0; $('ncAnuNext').disabled = st.anu.page === max;
     const tb = $('ncAnuTable');
     tb.querySelector('thead').innerHTML = '<tr><th class="c">Nota de crédito</th><th class="c">Doc. referencia</th><th class="c">Emisión</th><th class="c">Anulada</th><th class="c">Cliente</th><th class="c">Asume</th><th class="r">Monto</th><th class="c">Origen</th><th class="c">Clasificación</th></tr>';
@@ -219,6 +236,18 @@
     }).join('') || '<tr><td class="muted" colspan="9">No hay notas anuladas en este filtro.</td></tr>';
     $('ncAnuGuardar').style.display = Object.keys(st.anu.cambios).length ? '' : 'none';
   }
+  function anuladasFiltradas() {
+    const q = st.anu.q.trim().toLowerCase();
+    return R.anuladas.filter(a => {
+      const fa = facturaDeAnulada(a);
+      if (q && !(a.doc.toLowerCase().includes(q) || fa.toLowerCase().includes(q) || a.codcli.includes(q))) return false;
+      if (st.anu.cargo !== 'all' && a.cargo !== st.anu.cargo) return false;
+      if (st.anu.origen !== 'all' && (a.origen || '') !== st.anu.origen) return false;
+      if (st.anu.desde && a.fecha < st.anu.desde) return false;
+      if (st.anu.hasta && a.fecha > st.anu.hasta) return false;
+      return true;
+    });
+  }
 
   function renderConcil() {
     const c = R.concil;
@@ -229,10 +258,9 @@
     const defs = [['coincide', 'Coinciden', 'green', n('coincide')], ['distinto', 'Monto distinto', 'red', n('distinto') + n('duplicada')], ['reparto', 'Reparto distinto', 'amber', n('reparto')], ['rechparc', 'Rechazo / parcial', 'red', n('rechazo') + n('parcial') + n('facanulada')], ['falta', 'Falta emitir NC', 'navy', n('falta')], ['sinalex', 'NC sin Alex', 'teal', n('sinalex')]];
     $('ncConKpis').innerHTML = defs.map(([k, l, col, v]) => `<div class="kpi kpi-${col} ${st.con.filtro === k ? 'on' : ''}" data-cf="${k}"><div class="kpi-label">${l}</div><div class="kpi-val">${fN(v)}</div></div>`).join('');
     const filtro = st.con.filtro;
-    const lista = c.filas.filter(f => filtro === 'pend' ? f.estado !== 'coincide' : filtro === 'rechparc' ? (f.estado === 'rechazo' || f.estado === 'parcial' || f.estado === 'facanulada') : filtro === 'distinto' ? (f.estado === 'distinto' || f.estado === 'duplicada') : f.estado === filtro)
-      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.doc.localeCompare(b.doc));
+    const lista = conFiltradas();
     $('ncConTitulo').textContent = (c.finAlex ? `Alex hasta el ${fD(c.finAlex).slice(0, 5)} · ` : '') + (filtro === 'pend' ? `Por revisar · ${fN(lista.length)} facturas` : `${defs.find(d => d[0] === filtro)?.[1] || ''} · ${fN(lista.length)} facturas`);
-    const per = CFG.POR_PAG, max = Math.max(0, Math.ceil(lista.length / per) - 1); st.con.page = Math.min(st.con.page, max);
+    const per = st.printAll ? 1e9 : CFG.POR_PAG, max = Math.max(0, Math.ceil(lista.length / per) - 1); st.con.page = Math.min(st.con.page, max);
     $('ncConPage').textContent = `${st.con.page + 1} / ${max + 1}`; $('ncConPrev').disabled = st.con.page === 0; $('ncConNext').disabled = st.con.page === max;
     const tb = $('ncConTable');
     tb.querySelector('thead').innerHTML = '<tr><th class="c">Fecha</th><th class="c">Factura</th><th class="c">Cliente</th><th>Razón social</th><th class="r">Alex Nestlé</th><th class="r">Sistema Nestlé</th><th class="r">Dif.</th><th class="r">Alex ST</th><th class="r">Sistema ST</th><th class="r">Dif.</th><th class="c">Resultado</th></tr>';
@@ -254,6 +282,15 @@
       <td class="num">${f2(r.diario)}</td><td class="num">${f2(r.acumulado)}</td>${celdas(r.fecha, r.acumulado, r.correo, st.correo, 'data-correo')}
       <td class="num">${f2(r.diarioS)}</td><td class="num">${f2(r.acumuladoS)}</td>${celdas(r.fecha, r.acumuladoS, r.correoS, st.correoS, 'data-correos')}</tr>`).join('');
     $('ncCorreoGuardar').style.display = Object.keys(st.correo).length || Object.keys(st.correoS).length ? '' : 'none';
+  }
+
+  function conFiltradas() {
+    const c = R.concil; if (!c) return [];
+    const filtro = st.con.filtro;
+    return c.filas.filter(f => filtro === 'pend' ? f.estado !== 'coincide'
+      : filtro === 'rechparc' ? (f.estado === 'rechazo' || f.estado === 'parcial' || f.estado === 'facanulada')
+      : filtro === 'distinto' ? (f.estado === 'distinto' || f.estado === 'duplicada') : f.estado === filtro)
+      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.doc.localeCompare(b.doc));
   }
 
   function renderProducto() {
@@ -286,7 +323,7 @@
   }
   function renderDocs() {
     const lista = docsFiltrados();
-    const per = CFG.POR_PAG, max = Math.max(0, Math.ceil(lista.length / per) - 1); st.doc.page = Math.min(st.doc.page, max);
+    const per = st.printAll ? 1e9 : CFG.POR_PAG, max = Math.max(0, Math.ceil(lista.length / per) - 1); st.doc.page = Math.min(st.doc.page, max);
     $('ncDocPage').textContent = `${st.doc.page + 1} / ${max + 1}`; $('ncDocPrev').disabled = st.doc.page === 0; $('ncDocNext').disabled = st.doc.page === max;
     const pag = lista.slice(st.doc.page * per, st.doc.page * per + per);
     const tb = $('ncDocTable');
@@ -326,7 +363,7 @@
     if (!box) { box = document.createElement('div'); box.id = 'ncDetalle'; box.className = 'card nc-det'; }
     anclaCard.after(box);   // justo debajo de la tabla donde se hizo clic
     box.innerHTML = `<div class="nc-det-hd"><div class="nc-det-tt">${esc(doc)} · ${esc((f && f.nombre) || (a && a.razon) || '')}</div>
-      <div class="export-group"><button class="export-btn" id="ncDetExcel">Descargar Excel</button><button class="clear-btn" id="ncDetCerrar">Cerrar</button></div></div>
+      <div class="export-group"><button class="export-btn" data-nav="ventas" id="ncDetVentas">Ver en Ventas</button>${R.conDevolucion && R.conDevolucion.has(doc) ? '<button class="export-btn" data-nav="rech" id="ncDetRech">Ver rechazo</button>' : ''}<button class="export-btn" id="ncDetExcel">Descargar Excel</button><button class="clear-btn" id="ncDetCerrar">Cerrar</button></div></div>
       <div class="nc-det-g">
         <div class="nc-det-b"><div class="kpi-label">Factura (Ventas)</div>${f ? `<b>${fD(f.fecha)} · ${fS(ventaIgv)}</b><span>cliente ${esc(f.cli)} · s/IGV ${f2(venta)}</span>` : '<b>No está en Ventas</b><span>la factura se anuló o es de otro mes</span>'}</div>
         <div class="nc-det-b"><div class="kpi-label">Alex</div>${a ? `<b>${fP1(a.dpct)} · ${fS(a.dmonto)}</b><span>Nestlé ${fP1(a.npct)} (${f2(a.nmonto)}) · ST ${fP1(a.spct)} (${f2(a.smonto)})${a.producto ? ' · ' + esc(a.producto) : ''}${a.obs ? ' · ' + esc(a.obs) : ''}</span>` : '<b>No está en el archivo de Alex</b><span>&nbsp;</span>'}</div>
@@ -468,11 +505,11 @@
   }
   function hojaAnuladas() {
     return { name: 'Anuladas', title: 'NOTAS DE CRÉDITO · Anuladas', subtitle: sub(), columns: [{ header: 'Nota de crédito', width: 18, code: true }, { header: 'Doc. referencia', width: 18, code: true }, { header: 'Emisión', width: 12 }, { header: 'Anulada', width: 12 }, { header: 'Cliente', code: true }, { header: 'Asume' }, { header: 'Monto', fmt: M2 }, { header: 'Origen' }, { header: 'Clasificación' }],
-      rows: R.anuladas.map(a => [a.doc, facturaDeAnulada(a), fD(a.fecha), a.fecanu ? fD(a.fecanu) : '', a.codcli, a.cargo === 'N' ? 'Nestlé' : 'ST', a.montoAnulada, a.origen, CLASE[a.clase]]) };
+      rows: anuladasFiltradas().filter(a => st.anu.filtro === 'todas' || a.clase === st.anu.filtro).map(a => [a.doc, facturaDeAnulada(a), fD(a.fecha), a.fecanu ? fD(a.fecanu) : '', a.codcli, a.cargo === 'N' ? 'Nestlé' : 'ST', a.montoAnulada, a.origen, CLASE[a.clase]]) };
   }
   function hojaConcil(soloPend) {
     const c = R.concil; if (!c) return null;
-    const filas = c.filas.filter(f => !soloPend || f.estado !== 'coincide');
+    const filas = soloPend === 'filtro' ? conFiltradas() : c.filas.filter(f => !soloPend || f.estado !== 'coincide');
     return { name: 'Conciliación Alex', title: 'NOTAS DE CRÉDITO · Conciliación con Alex', subtitle: `${sub()} · ${soloPend ? 'solo facturas por revisar' : 'todas las facturas'}`, columns: [{ header: 'Fecha', width: 12 }, { header: 'Factura', width: 18, code: true }, { header: 'Cliente', code: true }, { header: 'Razón social', width: 32 }, { header: 'Alex Nestlé', fmt: M2 }, { header: 'Sistema Nestlé', fmt: M2 }, { header: 'Dif. Nestlé', fmt: M2 }, { header: 'Alex ST', fmt: M2 }, { header: 'Sistema ST', fmt: M2 }, { header: 'Dif. ST', fmt: M2 }, { header: 'Resultado', width: 16 }, { header: 'Notas de crédito', width: 34 }],
       rows: filas.map(f => [fD(f.fecha), f.doc, f.cli, f.razon, f.alexN, f.sisN, f.dN, f.alexS, f.sisS, f.dS, ESTADO[f.estado], f.ncs.join(' · ')]) };
   }
@@ -482,23 +519,44 @@
       rows: docsFiltrados().map(d => [fD(d.fecha), d.factura, d.cli, d.cliente, d.ventaIgv, d.N, d.S, d.pctN, d.pctS, d.pctT, d.ncs.join(' · '), d.producto, d.etiqueta || GRUPO[d.grupo]]) };
   }
   const fileTag = () => toIso(st.corte);
-  function reporteXlsx() { xlsx(`reporte_nc_${fileTag()}.xlsx`, [hojaResumen(), hojaDiario(), hojaAnuladas(), hojaConcil(true), hojaProd()].filter(Boolean)); }
-  function reportePdf() {
-    const t = R.tot; const img = CHART ? CHART.toBase64Image('image/png', 1) : '';
-    const fila = (l, a, b, c) => `<tr><td>${l}</td><td class="num">${a}</td><td class="num">${b}</td><td class="num">${c}</td></tr>`;
-    const c = R.concil;
-    $('ncReporte').innerHTML = `<div class="print-title" style="display:block"><div class="print-title-main">Reporte diario de notas de crédito</div><div class="print-title-sub">Saga Trans Confitería · Corte al ${largo(st.corte)}</div></div>
-      <table><thead><tr><th>Concepto</th><th>Nestlé</th><th>ST</th><th>Total</th></tr></thead><tbody>
-      ${fila('Descuentos c/IGV', f2(t.N), f2(t.S), f2(t.total))}${fila('Descuentos s/IGV', f2(t.Ns), f2(t.Ss), f2(t.totals))}${fila('Participación', fP1(t.shareN), fP1(t.shareS), '100%')}
-      ${fila('Rechazos c/IGV', f2(t.rechN), f2(t.rechS), f2(t.rechN + t.rechS))}${fila('Adicionales / Panetón', '', '', `${f2(t.adicional)} / ${f2(t.paneton)}`)}
-      ${fila('Sell out s/IGV · %DCTOS ST', '', `${fP(t.pctST)} (c/IGV ${fP(t.pctSTc)})`, f2(t.sellout))}</tbody></table>
-      ${img ? `<h2>% Descuentos ST</h2><img src="${img}" alt="Curva % descuentos ST">` : ''}
-      ${c ? `<h2>Conciliación con Alex</h2><table><tbody>${Object.entries(ESTADO).map(([k, v]) => `<tr><td>${v}</td><td class="num">${fN(c.cuenta[k] || 0)}</td></tr>`).join('')}</tbody></table>` : ''}
-      <h2>Diario por serie (con IGV)</h2>${$('ncDiarioTable').outerHTML}`;
-    const node = $('ncReporte'); node.classList.add('print-target'); document.body.classList.add('imprimiendo'); window.print();
-    setTimeout(() => { node.classList.remove('print-target'); document.body.classList.remove('imprimiendo'); }, 800);
+  function hojaCurva() {
+    return { name: 'Curva % ST', title: 'NOTAS DE CRÉDITO · % Descuentos ST por día', subtitle: sub(), columns: [{ header: 'Fecha', width: 12 }, { header: '% ST acumulado', fmt: PCT, width: 16 }], rows: R.curva.map(c => [fD(c.fecha), c.pct]) };
   }
-
+  function hojaAjustes() {
+    const M = D.ajustes.marcas, filas = [];
+    R.vigentes.filter(r => r.grupo === 'adicional').forEach(r => { const m = M[r.doc] || {}; filas.push([r.etiqueta || 'Adicional', 'Adicional', r.doc, r.refDoc, r.cargo === 'N' ? 'Nestlé' : 'ST', r.mondoc, `${m.usuario || ''} · ${m.fechaTexto || ''}`]); });
+    R.vigentes.filter(r => r.grupo === 'regularizada').forEach(r => { const m = M[r.doc] || {}; filas.push([`Regularizada con ND ${m.nd || ''}`, 'Nota de débito', r.doc, r.refDoc, r.cargo === 'N' ? 'Nestlé' : 'ST', -r.mondoc, `${m.usuario || ''} · ${m.fechaTexto || ''}`]); });
+    D.ajustes.manuales.forEach(a => filas.push([a.concepto, 'Ajuste manual', '', '', a.cargo === 'N' ? 'Nestlé' : 'ST', Number(a.monto), `${a.usuario || ''} · ${a.fechaTexto || ''}`]));
+    Object.entries(M).filter(([, v]) => ['rechazo', 'parcial', 'error'].includes(v.tipo)).forEach(([doc, v]) => filas.push([`Anulada clasificada como ${CLASE[v.tipo]}`, 'Anulada', doc, '', '', Number(v.monto) || 0, `${v.usuario || ''} · ${v.fechaTexto || ''}`]));
+    return { name: 'Ajustes', title: 'NOTAS DE CRÉDITO · Ajustes y marcas', subtitle: sub(), columns: [{ header: 'Concepto', width: 36 }, { header: 'Tipo', width: 16 }, { header: 'Nota de crédito', width: 18, code: true }, { header: 'Doc. referencia', width: 18, code: true }, { header: 'Asume' }, { header: 'Monto c/IGV', fmt: M2 }, { header: 'Registrado por', width: 30 }], rows: filas };
+  }
+  const HOJAS_TAB = {
+    resumen: () => [hojaResumen(), hojaCurva()], diario: () => [hojaDiario()], anuladas: () => [hojaAnuladas()],
+    concil: () => [hojaConcil('filtro')].filter(Boolean), producto: () => [hojaProd()], ajustes: () => [hojaAjustes()], documentos: () => [hojaDocs()],
+  };
+  const NOMBRE_TAB = { resumen: 'resumen', diario: 'diario_por_serie', anuladas: 'anuladas', concil: 'conciliacion_alex', producto: 'por_producto', ajustes: 'ajustes', documentos: 'documentos' };
+  function exportarTab(tab) { if (!R) return; const h = HOJAS_TAB[tab](); if (h.length) xlsx(`nc_${NOMBRE_TAB[tab]}_${fileTag()}.xlsx`, h); }
+  // PDF de una pestaña: se imprimen todas las filas (no solo la página visible)
+  function imprimirTab(tab) {
+    if (!R) return;
+    const panel = $('ncpanel-' + tab);
+    st.printAll = true; renderTodo();
+    panel.classList.add('print-target'); document.body.classList.add('imprimiendo');
+    window.print();
+    setTimeout(() => { panel.classList.remove('print-target'); document.body.classList.remove('imprimiendo'); st.printAll = false; renderTodo(); }, 600);
+  }
+  function exportarGrafico() {
+    if (!CHART) return;
+    const src = CHART.canvas, k = src.width / src.clientWidth, pad = 24 * k, head = 64 * k;
+    const out = document.createElement('canvas'); out.width = src.width + pad * 2; out.height = src.height + head + pad;
+    const g = out.getContext('2d'); g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, out.width, out.height);
+    g.fillStyle = '#211F1A'; g.font = `600 ${16 * k}px "Space Grotesk", Arial, sans-serif`; g.fillText($('ncCurvaTitulo').textContent, pad, 28 * k);
+    g.fillStyle = '#6B675F'; g.font = `${12 * k}px "IBM Plex Sans", Arial, sans-serif`;
+    g.fillText(`Saga Trans Confitería · corte al ${largo(st.corte)} · %DCTOS ST ${fP(R.tot.pctST)}`, pad, 48 * k);
+    g.drawImage(src, pad, head);
+    const a = document.createElement('a'); a.href = out.toDataURL('image/png'); a.download = `grafico_descuentos_st_${fileTag()}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
   // ---------------- Pestañas, módulo y eventos ----------------
   function setTab(tab) {
     if (st.tab !== tab && st.det) quitarDetalle();
@@ -514,7 +572,7 @@
   }
 
   function wire() {
-    $('railNC').addEventListener('click', abrir);
+    $('railNC').addEventListener('click', () => { setTab('resumen'); abrir(); });   // abre siempre en Resumen
     $('ncLogoutBtn').addEventListener('click', async () => { try { await supabaseClient.auth.signOut(); } catch (e) { console.error(e); } });
     const hoy = new Date(); st.mesSel = `${hoy.getFullYear()}-${pad(hoy.getMonth() + 1)}`; st.diaSel = `${st.mesSel}-${pad(hoy.getDate())}`;
     const sel = $('ncMesSel');
@@ -528,11 +586,8 @@
     const pedirAlex = () => $('ncAlexFile').click();
     $('ncBtnAlex').addEventListener('click', pedirAlex); $('ncBtnAlex2').addEventListener('click', pedirAlex);
     $('ncAlexFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) subirAlex(f); });
-    $('ncReportePdf').addEventListener('click', () => R && reportePdf());
-    $('ncReporteXlsx').addEventListener('click', () => R && reporteXlsx());
     // Diario
     $('ncIgvSel').addEventListener('click', e => { const b = e.target.closest('[data-igv]'); if (b) { st.igv = b.dataset.igv; renderDiario(); } });
-    $('ncExportDiario').addEventListener('click', () => xlsx(`nc_diario_${fileTag()}.xlsx`, [hojaDiario()]));
     // Anuladas
     $('ncAnuFiltro').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (b) { st.anu.filtro = b.dataset.f; st.anu.page = 0; renderAnuladas(); } });
     $('ncAnuTable').addEventListener('change', e => {
@@ -559,7 +614,6 @@
     $('ncConKpis').addEventListener('click', e => { const k = e.target.closest('[data-cf]'); if (k) { st.con.filtro = st.con.filtro === k.dataset.cf ? 'pend' : k.dataset.cf; st.con.page = 0; renderConcil(); } });
     $('ncConPrev').addEventListener('click', () => { st.con.page = Math.max(0, st.con.page - 1); renderConcil(); });
     $('ncConNext').addEventListener('click', () => { st.con.page++; renderConcil(); });
-    $('ncExportConcil').addEventListener('click', () => { const h = hojaConcil(false); if (h) xlsx(`nc_conciliacion_alex_${fileTag()}.xlsx`, [h]); });
     $('ncSrAlexTable').addEventListener('change', e => {
       const v = e.target.value === '' ? '' : parseFloat(e.target.value);
       if (e.target.dataset.correo) st.correo[e.target.dataset.correo] = v;
@@ -573,7 +627,6 @@
       st.correo = {}; st.correoS = {}; await guardarAjustes('Guardando montos del correo...');
     });
     // Producto
-    $('ncExportProd').addEventListener('click', () => xlsx(`nc_productos_${fileTag()}.xlsx`, [hojaProd()]));
     // Ajustes
     $('ncAjAgregar').addEventListener('click', async () => {
       const concepto = $('ncAjConcepto').value.trim(), monto = parseFloat($('ncAjMonto').value);
@@ -603,7 +656,9 @@
       if (e.target.id === 'ncSelLimpiar') { st.doc.sel.clear(); renderDocs(); }
       if (e.target.id === 'ncSelCliente') { const clis = new Set(R.documentos.filter(d => st.doc.sel.has(d.factura)).map(d => d.cli)); R.documentos.filter(d => clis.has(d.cli)).forEach(d => st.doc.sel.add(d.factura)); renderDocs(); }
     });
-    $('ncExportDocs').addEventListener('click', () => xlsx(`nc_documentos_${fileTag()}.xlsx`, [hojaDocs()]));
+    document.querySelectorAll('[data-ncprint]').forEach(b => b.addEventListener('click', () => imprimirTab(b.dataset.ncprint)));
+    document.querySelectorAll('[data-ncxlsx]').forEach(b => b.addEventListener('click', () => exportarTab(b.dataset.ncxlsx)));
+    $('ncImgResumen').addEventListener('click', exportarGrafico);
     // Detalle de factura: clic en el número (Conciliación, Documentos, Anuladas)
     $('modNC').addEventListener('click', e => {
       const td = e.target.closest('td[data-det]');
@@ -617,6 +672,8 @@
         else { st.ndForm = null; abrirDetalle(st.det, $('ncDetalle').previousElementSibling); }
       }
       if (e.target.id === 'ncDetExcel') exportDetalle();
+      if (e.target.id === 'ncDetVentas' && window.VENTAS && VENTAS.abrirDocumento) VENTAS.abrirDocumento(st.det);
+      if (e.target.id === 'ncDetRech' && window.RECH_verDocumento) RECH_verDocumento(st.det);
     });
   }
   wire();

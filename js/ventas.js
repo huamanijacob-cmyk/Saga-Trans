@@ -50,6 +50,27 @@
   window.VENTAS = {
     state: vs, get data() { return VD; }, get res() { return VR; }, config: VCFG,
     // Llamado desde Rechazos: muestra en Documentos exactamente las filas de esa cifra.
+    // Abre Documentos buscando un documento (lo usa Notas de crédito: "Ver en Ventas")
+    abrirDocumento: async doc => {
+      await mostrarModulo('ventas');
+      if (!VD) return;
+      vs.ext = null;
+      vs.doc = { buscar: doc, vend: 'all', cat: 'all', cats: null, desde: vs.corte.slice(0, 8) + '01', hasta: vs.corte, page: 0 };
+      setTab('documentos'); renderDocs();
+    },
+    // Para el botón "Regresar": foto de la pantalla y cómo volver a ella
+    nav: {
+      snapshot: () => ({ tab: vs.tab, cats: [...vs.cats], catCob: vs.catCob, doc: { ...vs.doc, cats: vs.doc.cats ? [...vs.doc.cats] : null },
+        cmp: { cats: [...vs.cmp.cats], vista: vs.cmp.vista }, ext: vs.ext }),
+      restore: async s => {
+        activarModulo('Ventas');
+        if (!VD) { await mostrarModulo('ventas'); }
+        vs.cats = new Set(s.cats); vs.catCob = s.catCob; vs.doc = { ...s.doc, cats: s.doc.cats ? [...s.doc.cats] : null };
+        vs.cmp.cats = new Set(s.cmp.cats); vs.cmp.vista = s.cmp.vista; vs.ext = s.ext || null;
+        renderTodo(); setTab(s.tab); if (s.tab === 'documentos') renderDocs();
+      },
+      etiqueta: () => (vs.tab === 'documentos' && vs.ext ? 'Documentos · desde Rechazos' : ({ avance: 'Avance general', cobertura: 'Cobertura', comparativo: 'Comparativo', documentos: 'Documentos', alertas: 'Alertas' }[vs.tab] || '')),
+    },
     abrirDesdeRechazos: async ({ quien, modo, filas, monto }) => {
       const parsed = C.parseVentas(filas);
       await mostrarModulo('ventas');
@@ -390,7 +411,7 @@
     const ext = vs.ext;
     $('vDocFiltros').style.display = ext ? 'none' : '';
     $('vDocExt').style.display = ext ? '' : 'none';
-    if (ext) $('vDocExt').innerHTML = `<span>Rechazos · <b>${esc(title(ext.quien))}</b> · ${ext.modo === 'real' ? 'Venta real' : 'Facturado'} · <b>${fS(ext.monto)}</b></span><button class="export-btn v-volver" id="vVolverRech">↩ Volver a Rechazos</button>`;
+    if (ext) $('vDocExt').innerHTML = `<span>Rechazos · <b>${esc(title(ext.quien))}</b> · ${ext.modo === 'real' ? 'Venta real' : 'Facturado'} · <b>${fS(ext.monto)}</b></span>`;
     const docs = ext
       ? C.documentos(ext.filas, { vendedor: null, cats: ext.cats, desde: '0000/00/00', hasta: '9999/99/99', buscar: '' })
       : filtrarDocs();
@@ -407,9 +428,9 @@
     $('vDocPrev').disabled = vs.doc.page === 0; $('vDocNext').disabled = vs.doc.page === maxPage;
     const tb = $('vDocTable');
     tb.querySelector('thead').innerHTML = '<tr><th class="c">Fecha</th><th class="c">Documento</th><th class="c">Vendedor</th><th class="c">Código</th><th>Cliente</th><th>Categoría</th><th class="r">Venta</th><th class="r">Devolución</th><th class="r">Neto</th></tr>';
-    tb.querySelector('tbody').innerHTML = page.length ? page.map(d => `<tr><td class="mono c">${fD(d.fecha)}</td><td class="mono c">${esc(d.documento)}</td><td class="mono c" title="${esc(title(d.nombreVendedor))}">${esc(d.vendedor)}</td>
+    tb.querySelector('tbody').innerHTML = page.length ? page.map(d => `<tr><td class="mono c">${fD(d.fecha)}</td><td class="mono c clickable" data-nav="nc" data-nc-doc="${esc(d.documento)}" title="Ver descuentos y notas de crédito"><span class="v-link">${esc(d.documento)}</span></td><td class="mono c" title="${esc(title(d.nombreVendedor))}">${esc(d.vendedor)}</td>
       <td class="mono c">${esc(d.codigo)}</td><td>${esc(d.cliente)}</td><td>${esc(title(d.cats))}</td>
-      <td class="num">${fS2(d.venta)}</td><td class="num rej">${d.devolucion ? fS2(d.devolucion) : ''}</td><td class="num">${fS2(d.neto)}</td></tr>`).join('')
+      <td class="num">${fS2(d.venta)}</td>${d.devolucion ? `<td class="num rej clickable" data-nav="rech" data-rech-doc="${esc(d.documento)}" title="Ver en Documentos rechazados"><span class="v-link" style="color:var(--red)">${fS2(d.devolucion)}</span></td>` : '<td class="num rej"></td>'}<td class="num">${fS2(d.neto)}</td></tr>`).join('')
       : '<tr><td colspan="9" class="muted">Sin documentos para este filtro.</td></tr>';
     tb.querySelector('tfoot').innerHTML = `<tr><td colspan="6">Total (${fN(docs.length)} documentos)</td><td class="num">${fS2(tot.venta)}</td><td class="num rej">${fS2(tot.devolucion)}</td><td class="num">${fS2(tot.neto)}</td></tr>`;
   }
@@ -657,8 +678,9 @@
   }
 
   function wire() {
-    $('railRechazos').addEventListener('click', () => mostrarModulo('rechazos'));
-    $('railVentas').addEventListener('click', () => mostrarModulo('ventas'));
+    // Clic en el menú lateral: cada módulo abre en su pestaña principal.
+    $('railRechazos').addEventListener('click', () => { mostrarModulo('rechazos'); if (typeof window.setTab === 'function') window.setTab('general'); });
+    $('railVentas').addEventListener('click', async () => { vs.ext = null; setTab('avance'); await mostrarModulo('ventas'); setTab('avance'); });
     $('vLogoutBtn').addEventListener('click', async () => { try { await supabaseClient.auth.signOut(); } catch (e) { console.error(e); } });
     initControles();
     document.querySelectorAll('.v-tabbar .tab-btn').forEach(b => b.addEventListener('click', () => setTab(b.dataset.vtab)));
@@ -682,7 +704,11 @@
     });
     $('vMetaGuardar').addEventListener('click', guardarMeta);
     $('vCobCats').addEventListener('click', e => { const b = e.target.closest('[data-vcat]'); if (b) { vs.catCob = b.dataset.vcat; renderCobertura(); } });
-    $('modVentas').addEventListener('click', e => { const td = e.target.closest('td.clickable[data-desde]'); if (td) irADocs(td.dataset); });
+    $('modVentas').addEventListener('click', e => {
+      const td = e.target.closest('td.clickable[data-desde]'); if (td) { irADocs(td.dataset); return; }
+      const n = e.target.closest('[data-nc-doc]'); if (n && window.NCMOD && NCMOD.abrirFactura) { NCMOD.abrirFactura(n.dataset.ncDoc); return; }
+      const r = e.target.closest('[data-rech-doc]'); if (r && window.RECH_verDocumento) RECH_verDocumento(r.dataset.rechDoc);
+    });
     $('vExportAvance').addEventListener('click', exportAvance);
     $('vExportCobMes').addEventListener('click', () => exportCob('mes'));
     $('vExportCobDia').addEventListener('click', () => exportCob('dia'));
@@ -697,7 +723,6 @@
     $('vCmpAcum').addEventListener('click', () => { vs.cmp.vista = 'acum'; renderCmp(); });
     $('vExportCmp').addEventListener('click', exportCmp);
     $('vExportCmpImg').addEventListener('click', exportCmpImg);
-    $('vDocExt').addEventListener('click', e => { if (e.target.closest('#vVolverRech')) { vs.ext = null; mostrarModulo('rechazos'); } });
     // Filtros de Documentos
     $('vDocSearch').addEventListener('input', e => { vs.doc.buscar = e.target.value; vs.doc.page = 0; dibujarDocs(); });
     $('vDocVend').addEventListener('change', e => { vs.doc.vend = e.target.value; vs.doc.page = 0; dibujarDocs(); });

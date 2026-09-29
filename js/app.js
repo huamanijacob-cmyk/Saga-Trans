@@ -412,6 +412,7 @@ function buildNcDocToRefMap(nc) {
 function resolveChofer(ventaRow, docToChofer, ncDocToRef) {
   const own = ventasDocNumber(ventaRow);
   if (!own) return null;
+  ventaRow._docOrigen = ncDocToRef[own] || own;   // si la línea es una NC, su factura de origen
   // Intento 1: el documento de la venta coincide directo con Transportistas
   // (así funciona para las líneas normales de venta).
   let hit = docToChofer[own];
@@ -1132,6 +1133,14 @@ function goToDocs({ chofer, vendedor, motivo } = {}) {
   setTab('documentos');
 }
 
+// Abre Documentos rechazados buscando un documento (lo usan Ventas y Notas de crédito).
+window.RECH_verDocumento = function (doc) {
+  if (typeof activarModulo === 'function') activarModulo('Rechazos');
+  state.doc = { ...state.doc, search: doc, vendor: 'all', chofer: 'all', motivo: 'all', page: 0 };
+  const inp = document.getElementById('docSearch'); if (inp) inp.value = doc;
+  setTab('documentos');
+};
+
 /* ---------------- Documentos rechazados ---------------- */
 
 let DOC_ROWS_CACHE = [];
@@ -1184,7 +1193,7 @@ function filteredDocRows() {
   const max = state.doc.montoMax === '' ? null : parseFloat(state.doc.montoMax);
   return DOC_ROWS_CACHE.filter(r => {
     const choferCod = r._chofer ? r._chofer.codcho : null;
-    if (q && !((String(ventasDocNumber(r) || '')).toLowerCase().includes(q) || (String((r._chofer && r._chofer.pde) || '')).toLowerCase().includes(q) || (String(codCliente(r) || '')).toLowerCase().includes(q) || (String(r.nombrecliente || '')).toLowerCase().includes(q))) return false;
+    if (q && !((String(ventasDocNumber(r) || '')).toLowerCase().includes(q) || (String(r._docOrigen || '')).toLowerCase().includes(q) || (String((r._chofer && r._chofer.pde) || '')).toLowerCase().includes(q) || (String(codCliente(r) || '')).toLowerCase().includes(q) || (String(r.nombrecliente || '')).toLowerCase().includes(q))) return false;
     if (state.doc.vendor !== 'all' && vendedorKey(r) !== state.doc.vendor) return false;
     if (state.doc.chofer === 'SIN_CHOFER') { if (choferCod) return false; }
     else if (state.doc.chofer !== 'all' && choferCod !== state.doc.chofer) return false;
@@ -1299,12 +1308,19 @@ function drawDocumentos() {
     <th>Fecha</th><th>PDE</th><th>Código</th><th>Cliente</th>
     <th>Vendedor</th><th>Chofer</th><th>Motivo</th><th style="text-align:right">Monto</th>
   </tr>`;
+  const thDoc = table.querySelector('thead tr').children[1];   // la columna Documento va después de Fecha
+  if (thDoc) thDoc.insertAdjacentHTML('beforebegin', '<th style="text-align:center">Documento</th>');
   const tbody = table.querySelector('tbody');
   tbody.innerHTML = '';
   pageRows.forEach(r => {
     const chofer = r._chofer ? (r._chofer.nomcho || r._chofer.codcho) : null;
     const tr = el('tr');
     tr.appendChild(el('td', 'mono muted', fmtFecha(r.fecha)));
+    const docO = r._docOrigen || ventasDocNumber(r) || '';
+    const tdDoc = el('td', 'mono clickable', docO ? `<span class="r-link">${docO}</span>` : '');
+    tdDoc.style.textAlign = 'center';
+    if (docO) { tdDoc.dataset.nav = 'nc'; tdDoc.title = 'Ver descuentos y notas de crédito de este documento'; tdDoc.addEventListener('click', () => window.NCMOD && window.NCMOD.abrirFactura && window.NCMOD.abrirFactura(docO)); }
+    tr.appendChild(tdDoc);
     tr.appendChild(el('td', 'mono', (r._chofer && r._chofer.pde) || ''));
     tr.appendChild(el('td', 'mono muted', codCliente(r)));
     tr.appendChild(el('td', null, r.nombrecliente || ''));

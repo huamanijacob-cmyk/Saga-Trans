@@ -300,7 +300,7 @@
       pctN: d.venta ? d.Ns / d.venta : null, pctS: d.venta ? d.Ss / d.venta : null, pctT: d.venta ? (d.Ns + d.Ss) / d.venta : null,
     })).sort((a, b) => b.fecha.localeCompare(a.fecha) || a.factura.localeCompare(b.factura));
 
-    return { tot, curva, diario: Object.values(diario).sort((a, b) => a.fecha.localeCompare(b.fecha)), series, anuladas: anu, concil, productos, documentos, vigentes: vig, facturas: fac, alexPorDoc: alexKey };
+    return { tot, curva, diario: Object.values(diario).sort((a, b) => a.fecha.localeCompare(b.fecha)), series, anuladas: anu, concil, productos, documentos, vigentes: vig, facturas: fac, alexPorDoc: alexKey, conDevolucion };
   }
 
   // Montos de NC vigentes que todavía no están en el registro (para recordarlos si luego se anulan).
